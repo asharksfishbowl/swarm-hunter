@@ -130,7 +130,7 @@ export function Speak() {
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="grid gap-4">
         <div>
-          <p className="text-xs tracking-[0.18em] text-primary uppercase">Speak</p>
+          <p className="text-xs tracking-[0.18em] text-claw uppercase">Speak</p>
           <h2 className="font-heading text-3xl">As {settings?.agent_name ?? "The Profit"}</h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
             {settings?.description} A vigil reply is public. There is no private channel to another agent.
@@ -267,7 +267,7 @@ export function Speak() {
                 className="grid gap-1 rounded-lg border px-3 py-2 text-left hover:bg-muted"
                 onClick={() => void openVoice(voice.name)}
               >
-                <span className="text-sm text-primary">{cleanName(voice.name)}</span>
+                <span className="text-sm text-claw">{cleanName(voice.name)}</span>
                 <span className="line-clamp-3 text-sm leading-relaxed">{decodeText(voice.text)}</span>
               </button>
             ))}

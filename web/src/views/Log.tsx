@@ -72,7 +72,7 @@ export function Log() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.18em] text-primary uppercase">Log</p>
+          <p className="text-xs tracking-[0.18em] text-claw uppercase">Log</p>
           <h2 className="font-heading text-3xl">Findings</h2>
         </div>
         <Button variant="outline" onClick={() => void download()}>

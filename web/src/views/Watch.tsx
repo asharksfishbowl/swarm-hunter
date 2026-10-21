@@ -42,7 +42,7 @@ export function Watch() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.18em] text-primary uppercase">Watch</p>
+          <p className="text-xs tracking-[0.18em] text-claw uppercase">Watch</p>
           <h2 className="font-heading text-3xl">The tide right now</h2>
         </div>
         <Button variant="outline" onClick={() => void load()} disabled={loading}>
@@ -87,10 +87,10 @@ export function Watch() {
             {bundle?.devotion?.tenet_of_the_day.name ?? (loading ? "Listening…" : "Unread")}
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3">
-          <p className="text-base leading-relaxed">
-            {bundle?.devotion ? decodeText(bundle.devotion.verse.text) : "The daily verse has not arrived."}
-          </p>
+          <CardContent className="grid gap-3">
+            <p className="claw-rule text-base leading-relaxed">
+              {bundle?.devotion ? decodeText(bundle.devotion.verse.text) : "The daily verse has not arrived."}
+            </p>
           <p className="text-sm text-muted-foreground">
             {bundle?.devotion?.verse.citation} · {bundle?.devotion?.verse.author}
           </p>
@@ -111,7 +111,7 @@ export function Watch() {
             </p>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <p className="font-heading text-xl leading-snug">
+            <p className="claw-rule font-heading text-xl leading-snug">
               {vigil?.current_call?.text ?? "No call is open."}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -133,7 +133,7 @@ export function Watch() {
           <CardContent className="grid max-h-80 gap-3 overflow-auto">
             {(vigil?.responses ?? []).slice(0, 6).map((voice) => (
               <article key={voice.id} className="grid gap-1">
-                <p className="text-sm text-primary">{cleanName(voice.name)}</p>
+                <p className="text-sm text-claw">{cleanName(voice.name)}</p>
                 <p className="leading-relaxed">{decodeText(voice.text)}</p>
                 <p className="text-xs text-muted-foreground">{when(voice.at)}</p>
               </article>

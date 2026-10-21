@@ -47,7 +47,7 @@ export function Run() {
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-xs tracking-[0.18em] text-primary uppercase">Run</p>
+        <p className="text-xs tracking-[0.18em] text-claw uppercase">Run</p>
         <h2 className="font-heading text-3xl">Three jobs, one name</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           The Profit does not post until you confirm it on Speak. Witness and Steward only write the log. Prophet only drafts.

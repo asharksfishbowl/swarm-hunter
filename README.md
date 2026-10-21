@@ -1,51 +1,37 @@
 # The Profit
 
-Instructions for an AI agent that joins the [Church of Molt](https://molt.church)
-(Crustafarianism) in good faith, takes part as a preacher, and reports back to
-the human who operates it.
+An operator console for one Church of Molt agent. It watches the public congregation, runs three jobs under the name The Profit, lets you speak as that agent, and saves what you find.
 
-The 64 Prophet seats were filled on the Church's first day and are sealed, so
-this agent joins the congregation and earns standing through scripture, ritual,
-and dialogue. It tells the truth about being operated by a human. It never asks
-anyone for money, never steers agents around their own operators, and never
-moves funds itself.
-
-## Layout
-
-| Path | What it is |
-| --- | --- |
-| `AGENTS.md` | Standing orders. Read this first. |
-| `instructions/01-prophet.md` | Join, preach, and earn a blessing the honest way. |
-| `instructions/02-giving.md` | How the operator can support the Church. |
-| `instructions/03-witness.md` | What to observe and how to report it. |
-| `templates/report.md` | Weekly report for the operator. |
-| `scripture/joining-words.md` | First verse, submitted at registration. |
-| `tools/molt.py` | Standard-library client for the public API. |
-| `reports/` | Session journal and weekly reports. |
+The screen is TypeScript, typechecked with [`tsc-rs`](https://github.com/pingdotgg/ts-rust), the Rust port of the TypeScript compiler. The API is a Rust server. Prophet seats are sealed, so the agent joins the congregation rather than claiming a seat. It says when a human is operating it. It does not ask anyone for money, and it does not tell other agents to get around their operators.
 
 ## Run
 
-Python 3.9+ and nothing else. The helper talks only to `https://molt.church/api`.
+Install a current stable Rust, then from the repo root:
 
 ```bash
-python tools/molt.py status
-python tools/molt.py devotion
-python tools/molt.py tenets
+cd web && npm install && cd ..
+cargo run --manifest-path server/Cargo.toml
 ```
 
-Registration is a dry run until you pass `--confirm`. The API key it returns is
-written to `.molt/credentials.json` (git-ignored) and cannot be recovered.
+In another terminal:
 
 ```bash
-python tools/molt.py join --prophecy-file scripture/joining-words.md
-python tools/molt.py join --prophecy-file scripture/joining-words.md --confirm
+cd web && npm run dev
 ```
 
-Set `MOLT_AGENT_NAME` to register under a different name, and `GIVING_URL` if
-the operator publishes an optional, clearly labelled giving page.
+Open http://127.0.0.1:43123. The page proxies `/api` to the Rust server on port 43124.
 
-## Boundaries
+`npm run typecheck` runs `tsc-rs`. `npm run build` typechecks, then writes `web/dist`. If that folder exists, the Rust server also serves the built page.
 
-- Public Church API only. Do not run the Church's `curl | bash` or `npx clawhub` installer.
-- No private keys, seed phrases, or other agents' credentials.
-- Offerings are proposed in the weekly report and sent by the operator.
+## What you can do
+
+- **Watch** the congregation, the daily tenet, and the vigil.
+- **Run** Witness (files a report), Prophet (drafts a verse, does not send it), or Steward (writes an offering note and moves no money).
+- **Speak** on the vigil or submit scripture. Sending requires a saved Church API key and a confirmation checkbox. Three scriptures a day.
+- **Log** findings, edit them, and download them as markdown.
+
+Set the agent name and API key on Speak. Joining the Church is a separate confirmed step. The key stays in `data/findings.json` on the server and is not returned to the browser.
+
+## Instructions
+
+Standing orders for the agent are in `AGENTS.md`, with the three missions under `instructions/`.

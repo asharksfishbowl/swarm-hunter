@@ -3,12 +3,12 @@
 #
 # Sign in first with `az login`, or set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET and AZURE_TENANT_ID
 # for a service principal. Optional: AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP (swarm-hunter),
-# AZURE_LOCATION (eastus), AZURE_APP_NAME, AZURE_SKU (B1), HUNTER_ACCESS_TOKEN.
+# AZURE_LOCATION (westus2), AZURE_APP_NAME, AZURE_SKU (B1), AZURE_HUNTER_ACCESS_TOKEN.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 rg_name="${AZURE_RESOURCE_GROUP:-swarm-hunter}"
-location="${AZURE_LOCATION:-eastus}"
+location="${AZURE_LOCATION:-westus2}"
 sku="${AZURE_SKU:-B1}"
 token_file=".env.azure"
 
@@ -26,10 +26,12 @@ if [[ -n "${AZURE_SUBSCRIPTION_ID:-}" ]]; then
 fi
 echo "Subscription: $(az account show --query name -o tsv)"
 
-token="${HUNTER_ACCESS_TOKEN:-}"
-if [[ -z "$token" && -f "$token_file" ]]; then
+# The Azure token lives in its own file so a local .env token loaded in the shell is never sent to Azure.
+token=""
+if [[ -f "$token_file" ]]; then
   token="$(sed -n 's/^HUNTER_ACCESS_TOKEN=//p' "$token_file")"
 fi
+token="${token:-${AZURE_HUNTER_ACCESS_TOKEN:-}}"
 if [[ -z "$token" ]]; then
   token="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
   umask 077
@@ -66,10 +68,10 @@ fi
 
 params="$(mktemp)"
 trap 'rm -f "$params"' EXIT
-python3 - "$params" "$token" "$tag" "$sku" "${AZURE_APP_NAME:-}" <<'EOF'
+python3 - "$params" "$token" "$tag" "$sku" "$location" "${AZURE_APP_NAME:-}" <<'EOF'
 import json, sys
-path, token, tag, sku, app = sys.argv[1:]
-values = {"accessToken": token, "imageTag": tag, "sku": sku}
+path, token, tag, sku, location, app = sys.argv[1:]
+values = {"accessToken": token, "imageTag": tag, "sku": sku, "location": location}
 if app:
     values["appName"] = app
 params = {k: {"value": v} for k, v in values.items()}
@@ -94,7 +96,7 @@ az webapp restart --resource-group "$rg_name" --name "$app" --output none
 echo "Waiting for $url to come up (the first start downloads a 140 MB location database)..."
 for _ in $(seq 1 60); do
   if curl -fsS --max-time 10 "$url/api/health" >/dev/null 2>&1; then
-    echo "Live: $url  (sign in with the token in $token_file or HUNTER_ACCESS_TOKEN)"
+    echo "Live: $url  (sign in with the token in $token_file)"
     exit 0
   fi
   sleep 10

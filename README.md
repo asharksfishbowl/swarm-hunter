@@ -58,7 +58,7 @@ az login
 deploy/azure/deploy.sh
 ```
 
-It creates, in resource group `swarm-hunter` (override with `AZURE_RESOURCE_GROUP` and `AZURE_LOCATION`):
+It creates, in resource group `swarm-hunter` in `westus2` (override with `AZURE_RESOURCE_GROUP` and `AZURE_LOCATION`; new pay-as-you-go subscriptions often have no App Service quota in East US or Europe until you request it):
 
 | Resource | Purpose |
 | --- | --- |
@@ -66,7 +66,7 @@ It creates, in resource group `swarm-hunter` (override with `AZURE_RESOURCE_GROU
 | Storage account + file share `hunter-data` | Mounted at `/app/data`, so evidence, custody log and the location database survive restarts and redeploys |
 | App Service plan (Linux, `B1`) and web app | HTTPS only, TLS 1.2+, FTP and basic-auth publishing off, health check on `/api/health` |
 
-The sign-in token comes from `HUNTER_ACCESS_TOKEN`, or is generated once and kept in `.env.azure` (git-ignored). The script prints the `https://<name>.azurewebsites.net` address when the site answers. To use a service principal instead of `az login`, set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and optionally `AZURE_SUBSCRIPTION_ID`. B1 plus the registry and storage cost roughly US$18 a month; delete everything with `az group delete -n swarm-hunter`.
+The sign-in token is kept in `.env.azure` (git-ignored): generated on the first run, or taken from `AZURE_HUNTER_ACCESS_TOKEN`. It is separate from the local `.env` token on purpose. The script prints the `https://<name>.azurewebsites.net` address when the site answers. To use a service principal instead of `az login`, set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and optionally `AZURE_SUBSCRIPTION_ID`. B1 plus the registry and storage cost roughly US$18 a month; delete everything with `az group delete -n swarm-hunter`.
 
 ## What you can do
 

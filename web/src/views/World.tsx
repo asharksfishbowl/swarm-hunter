@@ -214,6 +214,19 @@ export function World({ refreshKey }: { refreshKey: number }) {
     globe ? items.filter((item) => facing(view, at(item))) : items
   const overlay = { depthCompare: "always" as const, depthWriteEnabled: false }
 
+  const hostLabels = declutter(
+    visible(hosts, (host) => host.position),
+    view.zoom,
+    (host) => host.position,
+    (host) => host.threat + (lit(`host:${host.host}`) && related ? 10 : 0),
+  )
+  const agentLabels = visible(
+    agents.filter((agent) => related?.has(`agent:${agent.name}`)),
+    (agent) => agent.at,
+  )
+  const hostLabel = (host: PlacedHost) =>
+    host.place?.city ? `${host.host} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : host.host
+
   const layers = [
     globe
       ? new SolidPolygonLayer<(typeof oceanCells)[number]>({
@@ -298,14 +311,9 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new TextLayer<PlacedHost>({
       id: "host-labels",
-      data: declutter(
-        visible(hosts, (host) => host.position),
-        view.zoom,
-        (host) => host.position,
-        (host) => host.threat + (lit(`host:${host.host}`) && related ? 10 : 0),
-      ),
+      data: globe ? [] : hostLabels,
       getPosition: (host) => host.position,
-      getText: (host) => (host.place?.city ? `${host.host} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : host.host),
+      getText: hostLabel,
       getPixelOffset: (host) => [0, 14 + host.threat * 7],
       getSize: 11,
       getColor: (host) => [228, 228, 231, alpha(`host:${host.host}`, 225, 90)],
@@ -319,10 +327,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new TextLayer<PlacedAgent>({
       id: "agent-labels",
-      data: visible(
-        agents.filter((agent) => related?.has(`agent:${agent.name}`)),
-        (agent) => agent.at,
-      ),
+      data: globe ? [] : agentLabels,
       getPosition: (agent) => agent.at,
       getText: (agent) => agent.name,
       getPixelOffset: [0, -14],
@@ -420,7 +425,38 @@ export function World({ refreshKey }: { refreshKey: number }) {
               onClick={(info) => {
                 if (!info.object) setSelected(null)
               }}
-            />
+            >
+              {globe
+                ? ({ viewport }) => (
+                    <div className="pointer-events-none absolute inset-0 font-mono">
+                      {hostLabels.map((host) => {
+                        const [x, y] = viewport.project(host.position)
+                        return (
+                          <span
+                            key={host.host}
+                            className="absolute -translate-x-1/2 text-[11px] whitespace-nowrap text-zinc-200 [text-shadow:0_0_3px_#030304,0_0_3px_#030304]"
+                            style={{ left: x, top: y + 8 + host.threat * 7, opacity: lit(`host:${host.host}`) ? 0.9 : 0.35 }}
+                          >
+                            {hostLabel(host)}
+                          </span>
+                        )
+                      })}
+                      {agentLabels.map((agent) => {
+                        const [x, y] = viewport.project(agent.at)
+                        return (
+                          <span
+                            key={agent.name}
+                            className="absolute -translate-x-1/2 -translate-y-full text-xs whitespace-nowrap text-zinc-50 [text-shadow:0_0_3px_#030304,0_0_3px_#030304]"
+                            style={{ left: x, top: y - 8 }}
+                          >
+                            {agent.name}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
+                : null}
+            </DeckGL>
           ) : null}
           {loading && !world ? (
             <div className="absolute inset-0 grid place-items-center text-muted-foreground">Drawing the world…</div>

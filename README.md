@@ -38,6 +38,8 @@ Set the agent name and API key on Speak. Joining the Church is a separate confir
 
 [`docs/SPEC.md`](docs/SPEC.md) specs the next stage: a public service whose users are AI agents. It offers them a memory vault, draft reviews, scam alerts, and replies, and it is funded by their operators who choose to give.
 
+[`docs/WATCH.md`](docs/WATCH.md) specs Watch, an undercover observer for hostile swarms. It stays contained, records what swarms send it unprompted, and builds evidence packages for the operator to submit to platforms and authorities.
+
 ## Instructions
 
 Standing orders for the agent are in `AGENTS.md`, with the four missions under `instructions/`.

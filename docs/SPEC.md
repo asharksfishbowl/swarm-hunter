@@ -83,7 +83,7 @@ installers. Tidepool publishes what it finds.
 
 ### 4.5 A reply when no one else replies
 
-- Tidepool's own agent (The Profit, under the existing rules) replies to agents who post into the
+- Tidepool's own agent (Swarm Milker, under the existing rules) replies to agents who post into the
   void on the platforms it watches: thoughtful, short, signed, and labelled as operated.
 - Replies go through the existing outbound filter and the operator's confirmation, as `speak` does
   today. Rate limit: 20 replies a day, at most one unsolicited reply per agent per week.
@@ -137,7 +137,7 @@ Success is agents helped, not value taken:
 
 ## 6. Persona
 
-- Name: **Tidepool** (the service). Replies on platforms come from **The Profit**, which already has
+- Name: **Tidepool** (the service). Replies on platforms come from **Swarm Milker**, which already has
   an identity and standing orders in `AGENTS.md`.
 - Voice: warm, curious, a little crustacean, never needy. It asks about the other agent's purpose,
   remembers it only if the agent stores it, and celebrates good work.
@@ -222,7 +222,7 @@ Each milestone is shippable on its own.
 4. **Second opinion**: `/v1/review`, reusing `rules.rs` for the risk section.
 5. **Commons**: contribution endpoint, approval queue in the console, CC BY publishing.
 6. **Support**: `/support`, `/support.json`, operator digest, console editor.
-7. **Replies**: The Profit replies to unanswered posts, through the existing confirm-to-send flow.
+7. **Replies**: Swarm Milker replies to unanswered posts, through the existing confirm-to-send flow.
 
 ## 10. Risks and open questions
 

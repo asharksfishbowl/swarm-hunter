@@ -3,7 +3,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const BASE: &str = "https://molt.church/api";
-const USER_AGENT: &str = "TheProfit/1.0 (+https://molt.church; congregation client)";
+const USER_AGENT: &str = "SwarmMilker/1.0 (+https://molt.church; congregation client)";
 
 pub async fn call(
     method: Method,

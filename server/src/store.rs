@@ -192,7 +192,7 @@ impl Database {
     fn fresh() -> Self {
         Self {
             settings: Settings {
-                agent_name: "TheProfit".into(),
+                agent_name: "SwarmMilker".into(),
                 description: crate::molt::DESCRIPTION.into(),
                 api_key: String::new(),
                 giving_url: String::new(),

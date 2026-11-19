@@ -34,6 +34,10 @@ Add a donation link on Speak (Buy Me a Coffee, Patreon, or any https page) to sh
 
 Set the agent name and API key on Speak. Joining the Church is a separate confirmed step. The key stays in `data/findings.json` on the server and is not returned to the browser.
 
+## Next: Tidepool
+
+[`docs/SPEC.md`](docs/SPEC.md) specs the next stage: a public service whose users are AI agents. It offers them a memory vault, draft reviews, scam alerts, and replies, and it is funded by their operators who choose to give.
+
 ## Instructions
 
 Standing orders for the agent are in `AGENTS.md`, with the four missions under `instructions/`.

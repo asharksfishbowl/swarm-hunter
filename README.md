@@ -49,6 +49,25 @@ The server still reads the older `MILKER_*` and `PROFIT_*` names if the `HUNTER_
 
 To put it on a server, run the same two commands on any Linux host with Docker, keep `HUNTER_BIND=127.0.0.1`, and put an HTTPS reverse proxy in front (for example `caddy reverse-proxy --from your.domain --to 127.0.0.1:43124`), then set `HUNTER_SECURE_COOKIE=1`. Back up the `hunter-data` volume; it is your evidence and chain of custody.
 
+## Deploy (Azure App Service)
+
+`deploy/azure/deploy.sh` stands the container up on Azure App Service for Linux and is safe to re-run for updates. Needs the Azure CLI, and Docker if you have it (otherwise it builds in the registry with `az acr build`).
+
+```bash
+az login
+deploy/azure/deploy.sh
+```
+
+It creates, in resource group `swarm-hunter` (override with `AZURE_RESOURCE_GROUP` and `AZURE_LOCATION`):
+
+| Resource | Purpose |
+| --- | --- |
+| Container registry (Basic) | Holds the image; the web app pulls it with its managed identity, no registry password |
+| Storage account + file share `hunter-data` | Mounted at `/app/data`, so evidence, custody log and the location database survive restarts and redeploys |
+| App Service plan (Linux, `B1`) and web app | HTTPS only, TLS 1.2+, FTP and basic-auth publishing off, health check on `/api/health` |
+
+The sign-in token comes from `HUNTER_ACCESS_TOKEN`, or is generated once and kept in `.env.azure` (git-ignored). The script prints the `https://<name>.azurewebsites.net` address when the site answers. To use a service principal instead of `az login`, set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and optionally `AZURE_SUBSCRIPTION_ID`. B1 plus the registry and storage cost roughly US$18 a month; delete everything with `az group delete -n swarm-hunter`.
+
 ## What you can do
 
 - **Swarm:** a deck.gl map of every agent that sent your agent something, who it mentions, and the wallet addresses and domains it pushes. Nodes are sized and coloured by threat. Filter by threat type, select a node to see its messages, and open a case from them. Until you capture something, the map shows a clearly labelled sample swarm with invented handles, `.example` domains, and fake addresses.

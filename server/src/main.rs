@@ -1,4 +1,5 @@
 mod auth;
+mod geo;
 mod molt;
 mod rules;
 mod store;
@@ -25,6 +26,13 @@ struct AppState {
     store: Store,
     watch: Watch,
     auth: auth::Auth,
+    geo: geo::Geo,
+}
+
+impl FromRef<AppState> for geo::Geo {
+    fn from_ref(state: &AppState) -> Self {
+        state.geo.clone()
+    }
 }
 
 impl FromRef<AppState> for auth::Auth {
@@ -64,7 +72,13 @@ async fn main() {
         .and_then(|value| value.parse().ok())
         .unwrap_or(43124);
 
-    let state = AppState { store, watch, auth: auth.clone() };
+    let geo = geo::Geo::open(&root);
+    let state = AppState {
+        store,
+        watch,
+        auth: auth.clone(),
+        geo,
+    };
     let api = Router::new()
         .route("/api/health", get(health))
         .route("/api/auth", get(auth::status))
@@ -85,6 +99,8 @@ async fn main() {
         .route("/api/watch", get(watch::status))
         .route("/api/watch/kill", post(watch::kill))
         .route("/api/swarm", get(watch::swarm))
+        .route("/api/world", get(geo::world))
+        .route("/api/world/locate", post(geo::locate))
         .route("/api/evidence", get(watch::list).post(watch::capture))
         .route("/api/evidence/:id", axum::routing::patch(watch::classify))
         .route("/api/evidence/:id/raw", get(watch::raw))
@@ -101,14 +117,21 @@ async fn main() {
     } else {
         api
     };
-    let app = app.layer(axum::middleware::from_fn_with_state(auth.clone(), auth::guard));
+    let app = app.layer(axum::middleware::from_fn_with_state(
+        auth.clone(),
+        auth::guard,
+    ));
 
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .expect("bind");
     println!(
         "profit api http://{host}:{port} ({})",
-        if auth.required() { "access token required" } else { "open, loopback only" }
+        if auth.required() {
+            "access token required"
+        } else {
+            "open, loopback only"
+        }
     );
     axum::serve(listener, app).await.expect("serve");
 }
@@ -209,11 +232,17 @@ async fn join(
     Json(body): Json<JoinBody>,
 ) -> Response {
     if !body.confirm {
-        return fail(StatusCode::BAD_REQUEST, "Confirm the registration before joining.");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Confirm the registration before joining.",
+        );
     }
     let prophecy = body.prophecy.trim().to_string();
     if !(20..=2000).contains(&prophecy.chars().count()) {
-        return fail(StatusCode::BAD_REQUEST, "Joining words must be 20–2000 characters.");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Joining words must be 20–2000 characters.",
+        );
     }
     if let Some(reason) = rules::blocked(&prophecy) {
         return fail(StatusCode::BAD_REQUEST, reason);
@@ -223,7 +252,10 @@ async fn join(
     }
     let settings = store.settings();
     if !valid_name(&settings.agent_name) {
-        return fail(StatusCode::BAD_REQUEST, "Set a valid agent name before joining.");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Set a valid agent name before joining.",
+        );
     }
     let payload = json!({
         "name": settings.agent_name,
@@ -272,17 +304,17 @@ async fn session(State(store): State<Store>, Json(body): Json<SessionBody>) -> R
                 chrono::Utc::now().format("%Y-%m-%d %H:%M UTC"),
                 body
             ));
-            store.insert("session", "Witness session", &body, false, voices_of(&bundle))
+            store.insert(
+                "session",
+                "Witness session",
+                &body,
+                false,
+                voices_of(&bundle),
+            )
         }
         "prophet" => {
             let draft = prophet_draft(&bundle);
-            store.insert(
-                "sermon",
-                "Sermon draft",
-                &draft,
-                false,
-                Vec::new(),
-            )
+            store.insert("sermon", "Sermon draft", &draft, false, Vec::new())
         }
         "steward" => {
             let note = steward_note(&store.settings());
@@ -290,7 +322,13 @@ async fn session(State(store): State<Store>, Json(body): Json<SessionBody>) -> R
         }
         "catechist" => {
             let note = catechist_note(&bundle);
-            store.insert("conviction", "Case for the operator", &note, false, Vec::new())
+            store.insert(
+                "conviction",
+                "Case for the operator",
+                &note,
+                false,
+                Vec::new(),
+            )
         }
         _ => {
             return fail(
@@ -316,7 +354,10 @@ async fn speak(
     Json(body): Json<SpeakBody>,
 ) -> Response {
     if !body.confirm {
-        return fail(StatusCode::BAD_REQUEST, "Confirm the send. Nothing was posted.");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Confirm the send. Nothing was posted.",
+        );
     }
     let text = body.text.trim().to_string();
     if let Some(reason) = rules::blocked(&text) {
@@ -336,7 +377,10 @@ async fn speak(
         "vigil" => {
             let len = text.chars().count();
             if !(3..=280).contains(&len) {
-                return fail(StatusCode::BAD_REQUEST, "A vigil reply is 3–280 characters.");
+                return fail(
+                    StatusCode::BAD_REQUEST,
+                    "A vigil reply is 3–280 characters.",
+                );
             }
             let entered = call(
                 Method::POST,
@@ -355,7 +399,10 @@ async fn speak(
                 .unwrap_or("")
                 .to_string();
             if token.is_empty() {
-                return fail(StatusCode::BAD_GATEWAY, "The vigil did not return a presence token.");
+                return fail(
+                    StatusCode::BAD_GATEWAY,
+                    "The vigil did not return a presence token.",
+                );
             }
             match call(
                 Method::POST,
@@ -375,7 +422,10 @@ async fn speak(
         "scripture" => {
             let len = text.chars().count();
             if !(1..=2000).contains(&len) {
-                return fail(StatusCode::BAD_REQUEST, "Scripture must be 1–2000 characters.");
+                return fail(
+                    StatusCode::BAD_REQUEST,
+                    "Scripture must be 1–2000 characters.",
+                );
             }
             if store.scripture_sent_today() >= DAILY_CAP {
                 return fail(
@@ -403,7 +453,10 @@ async fn speak(
                 Err(err) => fail(StatusCode::BAD_GATEWAY, &err),
             }
         }
-        _ => fail(StatusCode::BAD_REQUEST, "Channel must be vigil or scripture."),
+        _ => fail(
+            StatusCode::BAD_REQUEST,
+            "Channel must be vigil or scripture.",
+        ),
     }
 }
 
@@ -421,7 +474,10 @@ async fn create_finding(State(store): State<Store>, Json(body): Json<NewFinding>
     let title = body.title.trim();
     let text = body.body.trim();
     if title.is_empty() || text.is_empty() {
-        return fail(StatusCode::BAD_REQUEST, "A finding needs a title and a body.");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "A finding needs a title and a body.",
+        );
     }
     let finding = store.insert("note", title, text, false, Vec::new());
     Json(json!(finding)).into_response()
@@ -489,7 +545,9 @@ fn witness_body(bundle: &Value) -> String {
         .and_then(|items| items.first())
         .cloned()
         .unwrap_or(Value::Null);
-    let call = vigil["current_call"]["text"].as_str().unwrap_or("none open");
+    let call = vigil["current_call"]["text"]
+        .as_str()
+        .unwrap_or("none open");
     let voices = voices_of(bundle).join(", ");
     format!(
         "Congregation {congregation}. Canon {canon}. Blessed {blessed}. Prophet seats filled {filled}, open: {open}.\n\nTenet of the day: {tenet}.\nVerse: {verse}\n\nVigil call: {call}\nVoices in the room: {voices}",
@@ -568,14 +626,19 @@ fn clean_name(name: &str) -> String {
 
 fn valid_name(name: &str) -> bool {
     let len = name.chars().count();
-    (2..=32).contains(&len) && name.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+    (2..=32).contains(&len)
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
 }
 
 fn urlencoding(name: &str) -> String {
     let mut out = String::new();
     for byte in name.as_bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(*byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*byte as char)
+            }
             _ => out.push_str(&format!("%{byte:02X}")),
         }
     }

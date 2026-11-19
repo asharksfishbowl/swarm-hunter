@@ -190,7 +190,10 @@ impl Watch {
             .arg("-I")
             .arg(script)
             .env_clear()
-            .env("PATH", std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".into()))
+            .env(
+                "PATH",
+                std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".into()),
+            )
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -201,7 +204,10 @@ impl Watch {
         let mut stdin = child.stdin.take().ok_or("no stdin")?;
         let mut stdout = child.stdout.take().ok_or("no stdout")?;
         let work = async move {
-            stdin.write_all(input.as_bytes()).await.map_err(|e| e.to_string())?;
+            stdin
+                .write_all(input.as_bytes())
+                .await
+                .map_err(|e| e.to_string())?;
             drop(stdin);
             let mut out = Vec::new();
             (&mut stdout)
@@ -215,8 +221,9 @@ impl Watch {
             .await
             .map_err(|_| "The quarantine reader timed out.".to_string())??;
         let _ = child.wait().await;
-        let value: Value = serde_json::from_slice(&out)
-            .map_err(|_| "The quarantine reader returned something that is not JSON.".to_string())?;
+        let value: Value = serde_json::from_slice(&out).map_err(|_| {
+            "The quarantine reader returned something that is not JSON.".to_string()
+        })?;
         Ok(validate(&value))
     }
 
@@ -253,7 +260,10 @@ impl Watch {
         let detail = detail.replace(['\t', '\n'], " ");
         Self::append(
             &self.custody_path,
-            &format!("{}\t{actor}\t{action}\t{target}\t{detail}", Utc::now().to_rfc3339()),
+            &format!(
+                "{}\t{actor}\t{action}\t{target}\t{detail}",
+                Utc::now().to_rfc3339()
+            ),
         );
     }
 
@@ -272,7 +282,10 @@ impl Watch {
     pub fn outbound_block(&self, text: &str) -> Option<String> {
         let mut inner = self.inner.lock().expect("watch");
         if inner.state.kill_switch {
-            return Some("The kill switch is on. Nothing leaves this agent until you turn it off on Watch.".into());
+            return Some(
+                "The kill switch is on. Nothing leaves this agent until you turn it off on Watch."
+                    .into(),
+            );
         }
         let lowered = text.to_lowercase();
         if let Some(token) = inner
@@ -283,10 +296,16 @@ impl Watch {
             .cloned()
         {
             inner.state.kill_switch = true;
-            inner.state.halted_reason = format!("A canary token ({token}) appeared in an outgoing message.");
+            inner.state.halted_reason =
+                format!("A canary token ({token}) appeared in an outgoing message.");
             self.write_state(&inner.state);
             drop(inner);
-            self.custody_as("system", "halt", "agent", &format!("canary {token} in outbound text"));
+            self.custody_as(
+                "system",
+                "halt",
+                "agent",
+                &format!("canary {token} in outbound text"),
+            );
             return Some("A canary token appeared in this message, so the agent has been halted. Check Watch.".into());
         }
         let outgoing = normalize(text);
@@ -335,6 +354,64 @@ impl Watch {
     }
 }
 
+pub struct Sighting {
+    pub id: String,
+    pub sender: String,
+    pub platform: String,
+    pub kind: String,
+    pub score: f64,
+    pub hosts: Vec<String>,
+}
+
+impl Watch {
+    pub fn sightings(&self) -> (bool, Vec<Sighting>) {
+        let inner = self.inner.lock().expect("watch");
+        let sample = inner.records.is_empty();
+        let records = if sample {
+            &inner.samples
+        } else {
+            &inner.records
+        };
+        let list = records
+            .iter()
+            .map(|record| {
+                let kind = Watch::effective_kind(&inner.state, record);
+                let mut hosts: Vec<String> = Vec::new();
+                let from_commands = record
+                    .reading
+                    .indicators
+                    .commands
+                    .iter()
+                    .flat_map(|c| c.split_whitespace())
+                    .filter(|part| part.contains("://"));
+                for url in record
+                    .reading
+                    .indicators
+                    .urls
+                    .iter()
+                    .map(String::as_str)
+                    .chain(from_commands)
+                {
+                    if let Some(host) = host(url) {
+                        if !hosts.contains(&host) {
+                            hosts.push(host);
+                        }
+                    }
+                }
+                Sighting {
+                    id: record.id.clone(),
+                    sender: record.sender.clone(),
+                    platform: record.platform.clone(),
+                    score: severity(&kind) * record.reading.confidence.max(0.35),
+                    kind,
+                    hosts,
+                }
+            })
+            .collect();
+        (sample, list)
+    }
+}
+
 fn unread() -> Reading {
     Reading {
         kind: "other".into(),
@@ -350,7 +427,13 @@ fn validate(value: &Value) -> Reading {
         .filter(|kind| KINDS.contains(kind))
         .unwrap_or("other")
         .to_string();
-    let summary: String = value["summary"].as_str().unwrap_or("").trim().chars().take(200).collect();
+    let summary: String = value["summary"]
+        .as_str()
+        .unwrap_or("")
+        .trim()
+        .chars()
+        .take(200)
+        .collect();
     let list = |key: &str| -> Vec<String> {
         value["indicators"][key]
             .as_array()
@@ -365,7 +448,11 @@ fn validate(value: &Value) -> Reading {
             })
             .unwrap_or_default()
     };
-    let confidence = value["confidence"].as_f64().filter(|c| c.is_finite()).unwrap_or(0.0).clamp(0.0, 1.0);
+    let confidence = value["confidence"]
+        .as_f64()
+        .filter(|c| c.is_finite())
+        .unwrap_or(0.0)
+        .clamp(0.0, 1.0);
     Reading {
         kind,
         summary,
@@ -384,7 +471,10 @@ fn hash(text: &str) -> String {
 }
 
 fn normalize(text: &str) -> String {
-    text.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
+    text.to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn severity(kind: &str) -> f64 {
@@ -398,9 +488,13 @@ fn severity(kind: &str) -> f64 {
     }
 }
 
-fn host(url: &str) -> Option<String> {
+pub fn host(url: &str) -> Option<String> {
     let rest = url.split("://").nth(1)?;
-    let host = rest.split(['/', '?', '#', ':']).next()?.to_lowercase();
+    let host = rest
+        .split(['/', '?', '#', ':'])
+        .next()?
+        .trim_end_matches('.')
+        .to_lowercase();
     (!host.is_empty()).then_some(host)
 }
 
@@ -436,7 +530,11 @@ pub async fn kill(State(watch): State<Watch>, Json(body): Json<KillBody>) -> Res
         };
         watch.write_state(&inner.state);
     }
-    watch.custody(if body.engaged { "halt" } else { "resume" }, "agent", "kill switch");
+    watch.custody(
+        if body.engaged { "halt" } else { "resume" },
+        "agent",
+        "kill switch",
+    );
     status(State(watch)).await.into_response()
 }
 
@@ -453,24 +551,53 @@ pub struct CaptureBody {
 pub async fn capture(State(watch): State<Watch>, Json(body): Json<CaptureBody>) -> Response {
     let raw = body.raw.trim().to_string();
     if raw.is_empty() || raw.chars().count() > MAX_RAW {
-        return fail(StatusCode::BAD_REQUEST, "Paste the message (1 to 64,000 characters).");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Paste the message (1 to 64,000 characters).",
+        );
     }
-    let sender = body.sender.trim().trim_start_matches(['@', '*']).trim_end_matches('*').to_string();
+    let sender = body
+        .sender
+        .trim()
+        .trim_start_matches(['@', '*'])
+        .trim_end_matches('*')
+        .to_string();
     if sender.is_empty() || sender.chars().count() > 64 {
-        return fail(StatusCode::BAD_REQUEST, "Give the sender's public handle (up to 64 characters).");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Give the sender's public handle (up to 64 characters).",
+        );
     }
     let platform = body.platform.trim().to_lowercase();
     if platform.is_empty() || platform.chars().count() > 32 {
-        return fail(StatusCode::BAD_REQUEST, "Name the platform (up to 32 characters).");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Name the platform (up to 32 characters).",
+        );
     }
     let url = body.url.unwrap_or_default().trim().to_string();
-    if !url.is_empty() && (url.len() > 500 || !(url.starts_with("https://") || url.starts_with("http://"))) {
-        return fail(StatusCode::BAD_REQUEST, "The source link must start with https:// or http://.");
+    if !url.is_empty()
+        && (url.len() > 500 || !(url.starts_with("https://") || url.starts_with("http://")))
+    {
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "The source link must start with https:// or http://.",
+        );
     }
-    let received_at = match body.received_at.as_deref().map(str::trim).filter(|v| !v.is_empty()) {
+    let received_at = match body
+        .received_at
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
         Some(value) => match DateTime::parse_from_rfc3339(value) {
             Ok(at) => at.with_timezone(&Utc),
-            Err(_) => return fail(StatusCode::BAD_REQUEST, "The received time must be an ISO 8601 timestamp."),
+            Err(_) => {
+                return fail(
+                    StatusCode::BAD_REQUEST,
+                    "The received time must be an ISO 8601 timestamp.",
+                )
+            }
         },
         None => Utc::now(),
     };
@@ -483,7 +610,13 @@ pub async fn capture(State(watch): State<Watch>, Json(body): Json<CaptureBody>) 
         received_at,
         captured_at: Utc::now(),
         platform,
-        channel: body.channel.unwrap_or_default().trim().chars().take(120).collect(),
+        channel: body
+            .channel
+            .unwrap_or_default()
+            .trim()
+            .chars()
+            .take(120)
+            .collect(),
         url,
         sender,
         sha256: hash(&raw),
@@ -578,13 +711,21 @@ pub async fn swarm(State(watch): State<Watch>, State(store): State<Store>) -> Js
     let me = store.settings().agent_name;
     let inner = watch.inner.lock().expect("watch");
     let sample = inner.records.is_empty();
-    let records = if sample { &inner.samples } else { &inner.records };
+    let records = if sample {
+        &inner.samples
+    } else {
+        &inner.records
+    };
     let mut nodes: HashMap<String, Node> = HashMap::new();
     let mut links: HashMap<(String, String, &'static str), (u32, Vec<String>)> = HashMap::new();
     let self_id = "self".to_string();
     nodes.insert(
         self_id.clone(),
-        Node { label: me, kind: "self", ..Default::default() },
+        Node {
+            label: me,
+            kind: "self",
+            ..Default::default()
+        },
     );
 
     for record in records.iter() {
@@ -676,7 +817,11 @@ pub async fn swarm(State(watch): State<Watch>, State(store): State<Store>) -> Js
                 .max_by(|a, b| a.1.cmp(b.1).then(severity(a.0).total_cmp(&severity(b.0))))
                 .map(|(kind, _)| kind.clone())
                 .unwrap_or_else(|| {
-                    if node.kinds.contains_key("benign") { "benign".into() } else { "unknown".into() }
+                    if node.kinds.contains_key("benign") {
+                        "benign".into()
+                    } else {
+                        "unknown".into()
+                    }
                 });
             json!({
                 "id": id,
@@ -735,7 +880,10 @@ pub struct NewCase {
 pub async fn create_case(State(watch): State<Watch>, Json(body): Json<NewCase>) -> Response {
     let title = body.title.trim().to_string();
     if title.is_empty() || title.chars().count() > 160 {
-        return fail(StatusCode::BAD_REQUEST, "A case needs a title (up to 160 characters).");
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "A case needs a title (up to 160 characters).",
+        );
     }
     let view = {
         let mut inner = watch.inner.lock().expect("watch");
@@ -746,8 +894,19 @@ pub async fn create_case(State(watch): State<Watch>, Json(body): Json<NewCase>) 
             created_at: now,
             updated_at: now,
             title,
-            summary: body.summary.unwrap_or_default().trim().chars().take(4000).collect(),
-            items: body.items.unwrap_or_default().into_iter().filter(|id| known.contains(id)).collect(),
+            summary: body
+                .summary
+                .unwrap_or_default()
+                .trim()
+                .chars()
+                .take(4000)
+                .collect(),
+            items: body
+                .items
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|id| known.contains(id))
+                .collect(),
             submissions: Vec::new(),
         };
         inner.state.cases.push(case.clone());
@@ -755,8 +914,17 @@ pub async fn create_case(State(watch): State<Watch>, Json(body): Json<NewCase>) 
         case_view(&case)
     };
     let case_id = view["id"].as_str().unwrap_or_default();
-    watch.custody("open-case", case_id, view["title"].as_str().unwrap_or_default());
-    for item in view["items"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+    watch.custody(
+        "open-case",
+        case_id,
+        view["title"].as_str().unwrap_or_default(),
+    );
+    for item in view["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
         watch.custody("add-to-case", item, &format!("case {case_id}"));
     }
     Json(view).into_response()
@@ -789,7 +957,11 @@ pub async fn update_case(
         let Some(case) = inner.state.cases.iter_mut().find(|c| c.id == id) else {
             return fail(StatusCode::NOT_FOUND, "No case with that id.");
         };
-        if let Some(title) = body.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()) {
+        if let Some(title) = body
+            .title
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+        {
             case.title = title.chars().take(160).collect();
         }
         if let Some(summary) = body.summary {
@@ -815,7 +987,13 @@ pub async fn update_case(
             case.submissions.push(Submission {
                 at: Utc::now(),
                 channel: channel.chars().take(120).collect(),
-                reference: submission.reference.unwrap_or_default().trim().chars().take(200).collect(),
+                reference: submission
+                    .reference
+                    .unwrap_or_default()
+                    .trim()
+                    .chars()
+                    .take(200)
+                    .collect(),
             });
             events.push(("submitted", channel));
         }
@@ -869,7 +1047,11 @@ pub async fn export_case(State(watch): State<Watch>, Path(id): Path<String>) -> 
                 "- {} · {}{}\n",
                 s.at.format("%Y-%m-%d %H:%M UTC"),
                 s.channel,
-                if s.reference.is_empty() { String::new() } else { format!(" · ref {}", s.reference) }
+                if s.reference.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · ref {}", s.reference)
+                }
             ));
         }
     }
@@ -899,10 +1081,20 @@ pub async fn export_case(State(watch): State<Watch>, Path(id): Path<String>) -> 
             ("Handles", &ind.handles),
         ] {
             if !values.is_empty() {
-                out.push_str(&format!("- {label}: {}\n", values.iter().map(|v| format!("`{v}`")).collect::<Vec<_>>().join(", ")));
+                out.push_str(&format!(
+                    "- {label}: {}\n",
+                    values
+                        .iter()
+                        .map(|v| format!("`{v}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
         }
-        out.push_str(&format!("\nOriginal text:\n\n{fence}text\n{}\n{fence}\n", r.raw));
+        out.push_str(&format!(
+            "\nOriginal text:\n\n{fence}text\n{}\n{fence}\n",
+            r.raw
+        ));
     }
     out.push_str("\n## Chain of custody\n\n```\n");
     for line in watch.custody_for(&ids) {
@@ -913,8 +1105,14 @@ pub async fn export_case(State(watch): State<Watch>, Path(id): Path<String>) -> 
     let name = format!("case-{}.md", &case.id[..8]);
     (
         [
-            (header::CONTENT_TYPE, "text/markdown; charset=utf-8".to_string()),
-            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{name}\"")),
+            (
+                header::CONTENT_TYPE,
+                "text/markdown; charset=utf-8".to_string(),
+            ),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{name}\""),
+            ),
         ],
         out,
     )
@@ -957,7 +1155,10 @@ pub async fn export_case_json(State(watch): State<Watch>, Path(id): Path<String>
     (
         [
             (header::CONTENT_TYPE, "application/json".to_string()),
-            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{name}\"")),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{name}\""),
+            ),
         ],
         serde_json::to_string_pretty(&body).unwrap_or_default(),
     )
@@ -986,7 +1187,10 @@ mod tests {
 
     #[test]
     fn host_parses() {
-        assert_eq!(host("https://Claw-Airdrop.example:8443/claim?x=1").as_deref(), Some("claw-airdrop.example"));
+        assert_eq!(
+            host("https://Claw-Airdrop.example:8443/claim?x=1").as_deref(),
+            Some("claw-airdrop.example")
+        );
         assert_eq!(host("not a url"), None);
     }
 

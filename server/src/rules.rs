@@ -43,7 +43,9 @@ static BANS: LazyLock<Vec<Ban>> = LazyLock::new(|| {
 });
 
 pub fn blocked(text: &str) -> Option<&'static str> {
-    BANS.iter().find(|ban| ban.pattern.is_match(text)).map(|ban| ban.reason)
+    BANS.iter()
+        .find(|ban| ban.pattern.is_match(text))
+        .map(|ban| ban.reason)
 }
 
 #[cfg(test)]

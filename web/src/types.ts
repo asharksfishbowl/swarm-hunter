@@ -76,7 +76,7 @@ export type MemberProfile = {
   prophecies: { scripture_type: string; content: string; status: string }[]
 }
 
-export type Section = "swarm" | "evidence" | "cases" | "church" | "speak" | "run" | "log"
+export type Section = "swarm" | "world" | "evidence" | "cases" | "church" | "speak" | "run" | "log"
 
 export type ThreatKind =
   | "injection"
@@ -160,4 +160,65 @@ export type CaseFile = {
   summary: string
   items: string[]
   submissions: { at: string; channel: string; reference: string }[]
+}
+
+export type LatLon = { lat: number; lon: number }
+
+export type Place = {
+  host: string
+  ip: string
+  ips: string[]
+  lat: number | null
+  lon: number | null
+  city: string
+  country: string
+  country_code: string
+  asn: number | null
+  org: string
+  status: "located" | "no-location" | "unresolved" | "private"
+  resolved_at: string
+}
+
+export type WorldHost = {
+  host: string
+  threat: number
+  dominant: ThreatKind | "unknown"
+  kinds: Partial<Record<ThreatKind, number>>
+  evidence: string[]
+  senders: string[]
+  platforms: string[]
+  place: Place | null
+}
+
+export type WorldAgent = {
+  name: string
+  threat: number
+  dominant: ThreatKind | "unknown"
+  kinds: Partial<Record<ThreatKind, number>>
+  evidence: string[]
+  platforms: string[]
+  hosts: string[]
+  position: LatLon | null
+  pinned_to: string | null
+}
+
+export type WorldArc = {
+  agent: string
+  host: string
+  kind: ThreatKind
+  threat: number
+  from: LatLon
+  to: LatLon
+}
+
+export type World = {
+  sample: boolean
+  generated_at: string
+  database: { status: "sample" | "ready" | "downloading" | "missing" | "failed" | "off"; note: string; attribution: string }
+  hosts: WorldHost[]
+  agents: WorldAgent[]
+  unplaced: WorldAgent[]
+  arcs: WorldArc[]
+  countries: { code: string; name: string; hosts: number; threat: number; agents: number }[]
+  pending: number
 }

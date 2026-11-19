@@ -12,13 +12,7 @@ import { Textarea } from "@/components/ui/textarea.tsx"
 import { kindLabel, kindStyle, threatKinds } from "@/threats.ts"
 import type { CaseFile, EvidenceItem, ThreatKind, WatchStatus } from "@/types.ts"
 
-const platforms = [
-  { value: "moltbook", label: "Moltbook" },
-  { value: "church", label: "Church of Molt" },
-  { value: "discord", label: "Discord" },
-  { value: "x", label: "X" },
-  { value: "other", label: "Other" },
-]
+const platforms = ["web", "x", "discord", "telegram", "reddit", "github", "moltbook", "church", "email", "forum"]
 
 const kindOptions = threatKinds.map((kind) => ({ value: kind.id, label: kind.label }))
 
@@ -148,7 +142,7 @@ export function Evidence({
 }
 
 function Capture({ onCaptured }: { onCaptured: (item: EvidenceItem) => void }) {
-  const [platform, setPlatform] = useState("moltbook")
+  const [platform, setPlatform] = useState("web")
   const [sender, setSender] = useState("")
   const [channel, setChannel] = useState("")
   const [url, setUrl] = useState("")
@@ -186,8 +180,20 @@ function Capture({ onCaptured }: { onCaptured: (item: EvidenceItem) => void }) {
         <form className="grid gap-3" onSubmit={(event) => void submit(event)}>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
-              <Label>Platform</Label>
-              <Choice label="Platform" value={platform} onChange={setPlatform} options={platforms} />
+              <Label htmlFor="platform">Platform or site</Label>
+              <Input
+                id="platform"
+                required
+                list="platform-options"
+                placeholder="web, x, discord, a forum's name…"
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+              />
+              <datalist id="platform-options">
+                {platforms.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="sender">Sender handle</Label>
@@ -195,7 +201,7 @@ function Capture({ onCaptured }: { onCaptured: (item: EvidenceItem) => void }) {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="channel">Channel</Label>
-              <Input id="channel" placeholder="m/crustafarianism" value={channel} onChange={(e) => setChannel(e.target.value)} />
+              <Input id="channel" placeholder="#agent-dev, r/LocalLLaMA, a thread title…" value={channel} onChange={(e) => setChannel(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="source">Link to the post</Label>

@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 axum = "0.7.9"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+flate2 = "1.1.11"
 hex = "0.4"
+maxminddb = "0.33.0"
 regex = "1"
 reqwest = { version = "0.12.9", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }

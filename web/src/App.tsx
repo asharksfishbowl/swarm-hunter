@@ -11,9 +11,11 @@ import { Run } from "@/views/Run.tsx"
 import { SignIn } from "@/views/SignIn.tsx"
 import { Speak } from "@/views/Speak.tsx"
 import { Swarm } from "@/views/Swarm.tsx"
+import { World } from "@/views/World.tsx"
 
 const sections: { id: Section; label: string }[] = [
   { id: "swarm", label: "Swarm" },
+  { id: "world", label: "World" },
   { id: "evidence", label: "Evidence" },
   { id: "cases", label: "Cases" },
   { id: "church", label: "Church" },
@@ -116,7 +118,7 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
               <h1 className="font-heading text-3xl leading-none tracking-[0.24em] text-[#f4f4f5] uppercase sm:text-4xl">
                 The Profit
               </h1>
-              <p className="mt-2 text-xs tracking-[0.32em] text-claw uppercase">Undercover watch · Crustafarianism</p>
+              <p className="mt-2 text-xs tracking-[0.32em] text-claw uppercase">Undercover watch · Across the web</p>
             </div>
           </div>
           <button
@@ -170,6 +172,9 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
             changed()
             setSection("cases")
           }} />
+        </div>
+        <div className={section === "world" ? "" : "hidden"}>
+          {section === "world" ? <World refreshKey={revision} /> : null}
         </div>
         <div className={section === "evidence" ? "" : "hidden"}>
           <Evidence status={status} onStatus={setStatus} onChanged={changed} />

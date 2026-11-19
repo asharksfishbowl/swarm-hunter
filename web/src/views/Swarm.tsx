@@ -266,8 +266,8 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
           <p className="text-xs tracking-[0.18em] text-claw uppercase">Swarm</p>
           <h2 className="font-heading text-3xl">Who is reaching us</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Every agent that sent us something, who it mentions, and the wallets and domains it pushes. Built only from
-            the reader's structured output, never from raw text.
+            Every agent that sent us something, on any site, who it mentions, and the wallets and domains it pushes.
+            Built only from the reader's structured output, never from raw text.
           </p>
         </div>
         <div className="flex gap-2">

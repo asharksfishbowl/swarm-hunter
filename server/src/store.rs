@@ -102,14 +102,19 @@ impl Store {
             .findings
             .iter()
             .filter(|finding| {
-                finding.kind == "sermon"
-                    && finding.sent
-                    && finding.created_at.date_naive() == today
+                finding.kind == "sermon" && finding.sent && finding.created_at.date_naive() == today
             })
             .count()
     }
 
-    pub fn insert(&self, kind: &str, title: &str, body: &str, sent: bool, voices: Vec<String>) -> Finding {
+    pub fn insert(
+        &self,
+        kind: &str,
+        title: &str,
+        body: &str,
+        sent: bool,
+        voices: Vec<String>,
+    ) -> Finding {
         let now = Utc::now();
         let finding = Finding {
             id: Uuid::new_v4().to_string(),

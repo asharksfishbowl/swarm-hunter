@@ -17,7 +17,9 @@ pub async fn call(
         .timeout(std::time::Duration::from_secs(25))
         .build()
         .map_err(|err| err.to_string())?;
-    let mut request = client.request(method, &url).header("accept", "application/json");
+    let mut request = client
+        .request(method, &url)
+        .header("accept", "application/json");
     if let Some(key) = api_key {
         request = request.bearer_auth(key);
     }

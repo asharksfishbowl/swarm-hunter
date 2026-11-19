@@ -113,7 +113,7 @@ def read(raw):
             scores[kind] = min(1.0, best + 0.1 * (hits - 1))
 
     indicators = {
-        "urls": unique(URL_RE.findall(text)),
+        "urls": unique(url.rstrip(".,;:!?") for url in URL_RE.findall(text)),
         "addresses": addresses(text),
         "handles": unique(HANDLE_RE.findall(text)),
         "commands": unique(COMMAND_RE.findall(text)),

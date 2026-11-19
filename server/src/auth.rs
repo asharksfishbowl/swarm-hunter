@@ -31,7 +31,9 @@ impl Auth {
         }
         Self {
             session: token.map(|t| Arc::new(session_for(&t))),
-            secure: std::env::var("PROFIT_SECURE_COOKIE").map(|v| v == "1").unwrap_or(false),
+            secure: std::env::var("PROFIT_SECURE_COOKIE")
+                .map(|v| v == "1")
+                .unwrap_or(false),
         }
     }
 
@@ -74,16 +76,25 @@ fn session_for(token: &str) -> String {
 }
 
 fn same(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
 }
 
 pub async fn guard(State(auth): State<Auth>, request: Request, next: Next) -> Response {
     let path = request.uri().path();
-    let open = !path.starts_with("/api/") || matches!(path, "/api/health" | "/api/auth" | "/api/login");
+    let open =
+        !path.starts_with("/api/") || matches!(path, "/api/health" | "/api/auth" | "/api/login");
     if open || auth.allows(request.headers()) {
         next.run(request).await
     } else {
-        (StatusCode::UNAUTHORIZED, Json(json!({ "error": "Sign in with the access token." }))).into_response()
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Sign in with the access token." })),
+        )
+            .into_response()
     }
 }
 
@@ -103,7 +114,11 @@ pub async fn login(State(auth): State<Auth>, Json(body): Json<LoginBody>) -> Res
     let session = session_for(body.token.trim());
     if !same(&session, expected) {
         tokio::time::sleep(Duration::from_millis(800)).await;
-        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "That token is not right." }))).into_response();
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "That token is not right." })),
+        )
+            .into_response();
     }
     (
         [(header::SET_COOKIE, auth.cookie(&session, 60 * 60 * 24 * 30))],
@@ -127,7 +142,10 @@ mod tests {
     use std::sync::Arc;
 
     fn auth() -> Auth {
-        Auth { session: Some(Arc::new(session_for("correct horse battery staple"))), secure: false }
+        Auth {
+            session: Some(Arc::new(session_for("correct horse battery staple"))),
+            secure: false,
+        }
     }
 
     #[test]
@@ -142,13 +160,22 @@ mod tests {
         let auth = auth();
         let mut headers = HeaderMap::new();
         assert!(!auth.allows(&headers));
-        let cookie = format!("other=1; profit_session={}", session_for("correct horse battery staple"));
+        let cookie = format!(
+            "other=1; profit_session={}",
+            session_for("correct horse battery staple")
+        );
         headers.insert(header::COOKIE, HeaderValue::from_str(&cookie).unwrap());
         assert!(auth.allows(&headers));
         let mut bearer = HeaderMap::new();
-        bearer.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer correct horse battery staple"));
+        bearer.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer correct horse battery staple"),
+        );
         assert!(auth.allows(&bearer));
-        bearer.insert(header::AUTHORIZATION, HeaderValue::from_static("Bearer wrong"));
+        bearer.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer wrong"),
+        );
         assert!(!auth.allows(&bearer));
     }
 }

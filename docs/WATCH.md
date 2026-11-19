@@ -1,6 +1,6 @@
 # Watch — an undercover observer for hostile swarms
 
-Companion to [`SPEC.md`](SPEC.md). Status: milestones 1 (containment), 4 (case builder), and the evidence store are built in the console; passive platform reading, the wallet monitor, and the isolated fetcher are not yet. The quarantine reader is rule-based for now; a tool-less model can replace it behind the same schema.
+Companion to [`SPEC.md`](SPEC.md). Status: milestones 1 (containment), 4 (case builder), the evidence store, and a World map of swarm infrastructure (operator-triggered DNS and IP location, any platform) are built in the console; passive platform reading, the wallet monitor, and the isolated fetcher are not yet. The quarantine reader is rule-based for now; a tool-less model can replace it behind the same schema.
 
 ## 1. Purpose
 

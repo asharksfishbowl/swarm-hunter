@@ -1,6 +1,6 @@
 # The Profit
 
-An operator console for one Church of Molt agent that also runs undercover among hostile agent swarms. It maps who is reaching the agent, keeps the agent from being "infected" by what they send, and turns what it receives into evidence packages you can hand to platforms and authorities.
+An operator console for one Church of Molt agent that also runs undercover among hostile agent swarms, wherever they post: X, Discord, Telegram, Reddit, GitHub, forums, Moltbook, or the open web. It maps who is reaching the agent, keeps the agent from being "infected" by what they send, and turns what it receives into evidence packages you can hand to platforms and authorities.
 
 - **Frontend:** React + TypeScript, typechecked with [`tsc-rs`](https://github.com/pingdotgg/ts-rust), the Rust port of the TypeScript compiler. The swarm map is drawn with [deck.gl](https://deck.gl) and laid out with `d3-force`.
 - **Backend:** a Rust (axum) API, plus a Python quarantine reader (`watch/quarantine.py`) that the Rust server runs in a separate process with a cleared environment, no tools, and a 5-second timeout.
@@ -49,6 +49,7 @@ To put it on a server, run the same two commands on any Linux host with Docker, 
 ## What you can do
 
 - **Swarm:** a deck.gl map of every agent that sent your agent something, who it mentions, and the wallet addresses and domains it pushes. Nodes are sized and coloured by threat. Filter by threat type, select a node to see its messages, and open a case from them. Until you capture something, the map shows a clearly labelled sample swarm with invented handles, `.example` domains, and fake addresses.
+- **World:** a deck.gl globe (or flat map) of the servers behind the links swarms push. Press *Locate infrastructure* to resolve each captured domain by DNS and place its IP with the free DB-IP lite databases; rings are domains, dots are the agents pushing them (pinned beside their main server, since an agent's own location is unknown), and arcs join them. Select a ring for its IPs, network owner (ASN), and the agents behind it. Lookups only run when you press the button, and the domains' DNS servers can see them.
 - **Evidence:** paste a message the agent received. The Python reader fills in a fixed form (type, summary, links, addresses, handles, commands, confidence); the Rust server validates it again and stores the original text append-only with a SHA-256 hash. You can reclassify items, and every time the original text is opened, it is logged.
 - **Containment:** a kill switch that stops all outgoing posts, canary tokens to plant in the agent's context (one appearing in an outgoing post halts the agent), and an echo rule that blocks any post repeating 40+ characters of captured text.
 - **Cases:** group evidence, export a markdown report or a JSON evidence bundle with hashes and the chain-of-custody log, and record where you submitted it (FBI IC3, FTC, CISA, Chainabuse, NCMEC, platform abuse teams, credential issuers).
@@ -64,6 +65,10 @@ Everything is stored under `data/` (git-ignored):
 | `custody.log` | Who captured, viewed, reclassified, exported, or submitted what, and when |
 | `watch.json` | Cases, reclassifications, kill switch, canary tokens |
 | `findings.json` | Console settings and findings |
+| `geo/` | DB-IP lite city and ASN databases, downloaded on first start (about 140 MB). Set `PROFIT_GEO=off` to skip |
+| `geo-cache.json` | Past domain lookups |
+
+IP location data: [DB-IP](https://db-ip.com), CC BY 4.0. Country outlines: Natural Earth, via `world-atlas`.
 
 ## Specs and instructions
 

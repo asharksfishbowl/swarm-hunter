@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import DeckGL from "@deck.gl/react"
 import { _GlobeView as GlobeView, MapView, type PickingInfo } from "@deck.gl/core"
 import { ArcLayer, GeoJsonLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from "@deck.gl/layers"
-import { CollisionFilterExtension, type CollisionFilterExtensionProps } from "@deck.gl/extensions"
 import { feature } from "topojson-client"
 import type { Topology, GeometryCollection } from "topojson-specification"
 import type { FeatureCollection } from "geojson"
@@ -44,7 +43,7 @@ function fitView(mode: Mode, width: number, height: number, center?: View): View
   const longitude = center?.longitude ?? 10
   if (!width || !height) return { longitude, latitude: 20, zoom: 0 }
   if (mode === "globe") return { longitude, latitude: 18, zoom: Math.log2((0.8 * Math.min(width, height)) / 102) }
-  return { longitude: 10, latitude: 22, zoom: Math.max(0, Math.log2(width / 512)) }
+  return { longitude: 10, latitude: 25, zoom: Math.max(0, Math.log2(Math.min(width / 512, height / 400))) }
 }
 
 function facing(view: View, [lon, lat]: [number, number]): boolean {
@@ -53,6 +52,21 @@ function facing(view: View, [lon, lat]: [number, number]): boolean {
     Math.sin(lat * toRad) * Math.sin(view.latitude * toRad) +
     Math.cos(lat * toRad) * Math.cos(view.latitude * toRad) * Math.cos((lon - view.longitude) * toRad)
   return cos > 0.2
+}
+
+function declutter<T>(items: T[], zoom: number, at: (item: T) => [number, number], rank: (item: T) => number): T[] {
+  const gap = 34 / Math.pow(2, zoom)
+  const kept: [number, number][] = []
+  return [...items]
+    .sort((a, b) => rank(b) - rank(a))
+    .filter((item) => {
+      const [lon, lat] = at(item)
+      const clash = kept.some(
+        ([klon, klat]) => Math.abs(klat - lat) < gap * 0.45 && Math.abs(klon - lon) * Math.cos((lat * Math.PI) / 180) < gap,
+      )
+      if (!clash) kept.push([lon, lat])
+      return !clash
+    })
 }
 
 function spread(hosts: WorldHost[]): Map<string, [number, number]> {
@@ -146,7 +160,11 @@ export function World({ refreshKey }: { refreshKey: number }) {
       const next = await api<WorldData>("/api/world/locate", { method: "POST", body: JSON.stringify({ retry: true }) })
       setWorld(next)
       const placed = next.hosts.filter((h) => h.place?.status === "located").length
-      setNotice(`Placed ${placed} of ${next.hosts.length} domains.`)
+      setNotice(
+        next.hosts.length
+          ? `Placed ${placed} of ${next.hosts.length} domains.`
+          : "No links in captured messages yet, so there is nothing to locate.",
+      )
       setError("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lookups failed.")
@@ -220,8 +238,8 @@ export function World({ refreshKey }: { refreshKey: number }) {
       data: world?.arcs ?? [],
       getSourcePosition: (arc) => [arc.from.lon, arc.from.lat],
       getTargetPosition: (arc) => positions.get(arc.host) ?? [arc.to.lon, arc.to.lat],
-      getSourceColor: (arc) => [...kindColor(arc.kind), alpha(`host:${arc.host}`, 210, 25)] as [number, number, number, number],
-      getTargetColor: (arc) => [...kindColor(arc.kind), alpha(`host:${arc.host}`, 255, 25)] as [number, number, number, number],
+      getSourceColor: (arc) => [...kindColor(arc.kind), alpha(`host:${arc.host}`, 210, 45)] as [number, number, number, number],
+      getTargetColor: (arc) => [...kindColor(arc.kind), alpha(`host:${arc.host}`, 255, 45)] as [number, number, number, number],
       getWidth: (arc) => 1.5 + arc.threat * 2,
       getHeight: 0.4,
       widthUnits: "pixels",
@@ -230,7 +248,8 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new ScatterplotLayer<PlacedHost>({
       id: "hosts",
-      data: hosts,
+      data: visible(hosts, (host) => host.position),
+      parameters: overlay,
       pickable: true,
       stroked: true,
       billboard: globe,
@@ -239,11 +258,11 @@ export function World({ refreshKey }: { refreshKey: number }) {
       radiusUnits: "pixels",
       lineWidthUnits: "pixels",
       getLineWidth: (host) => (selected?.type === "host" && selected.id === host.host ? 3 : 2),
-      getFillColor: (host) => [...kindColor(host.dominant), alpha(`host:${host.host}`, 70, 10)] as [number, number, number, number],
+      getFillColor: (host) => [...kindColor(host.dominant), alpha(`host:${host.host}`, 70, 25)] as [number, number, number, number],
       getLineColor: (host) =>
         selected?.type === "host" && selected.id === host.host
           ? [255, 255, 255, 255]
-          : ([...kindColor(host.dominant), alpha(`host:${host.host}`, 255, 40)] as [number, number, number, number]),
+          : ([...kindColor(host.dominant), alpha(`host:${host.host}`, 255, 90)] as [number, number, number, number]),
       onHover: (info: PickingInfo<PlacedHost>) => setHovered(info.object ? { type: "host", id: info.object.host } : null),
       onClick: (info: PickingInfo<PlacedHost>) => {
         if (info.object) {
@@ -255,7 +274,8 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new ScatterplotLayer<PlacedAgent>({
       id: "agents",
-      data: agents,
+      data: visible(agents, (agent) => agent.at),
+      parameters: overlay,
       pickable: true,
       stroked: true,
       billboard: globe,
@@ -264,7 +284,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
       radiusUnits: "pixels",
       lineWidthUnits: "pixels",
       getLineWidth: 1,
-      getFillColor: (agent) => [...kindColor(agent.dominant), alpha(`agent:${agent.name}`, 240, 30)] as [number, number, number, number],
+      getFillColor: (agent) => [...kindColor(agent.dominant), alpha(`agent:${agent.name}`, 240, 80)] as [number, number, number, number],
       getLineColor: (agent) =>
         selected?.type === "agent" && selected.id === agent.name ? [255, 255, 255, 255] : [3, 3, 4, 200],
       onHover: (info: PickingInfo<PlacedAgent>) => setHovered(info.object ? { type: "agent", id: info.object.name } : null),
@@ -276,24 +296,26 @@ export function World({ refreshKey }: { refreshKey: number }) {
       },
       updateTriggers: { getFillColor: [focus], getLineColor: [selected] },
     }),
-    new TextLayer<PlacedHost, CollisionFilterExtensionProps<PlacedHost>>({
+    new TextLayer<PlacedHost>({
       id: "host-labels",
-      data: visible(hosts, (host) => host.position),
+      data: declutter(
+        visible(hosts, (host) => host.position),
+        view.zoom,
+        (host) => host.position,
+        (host) => host.threat + (lit(`host:${host.host}`) && related ? 10 : 0),
+      ),
       getPosition: (host) => host.position,
       getText: (host) => (host.place?.city ? `${host.host} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : host.host),
       getPixelOffset: (host) => [0, 14 + host.threat * 7],
       getSize: 11,
-      getColor: (host) => [228, 228, 231, alpha(`host:${host.host}`, 225, 40)],
+      getColor: (host) => [228, 228, 231, alpha(`host:${host.host}`, 225, 90)],
       fontFamily: labelFont,
       characterSet: "auto",
       outlineWidth: 3,
       outlineColor: [3, 3, 4, 255],
       fontSettings: { sdf: true },
       parameters: overlay,
-      extensions: [new CollisionFilterExtension()],
-      getCollisionPriority: (host) => host.threat * 100 + (lit(`host:${host.host}`) ? 100 : 0),
-      collisionTestProps: { sizeScale: 1.4 },
-      updateTriggers: { getColor: [focus], getCollisionPriority: [focus] },
+      updateTriggers: { getColor: [focus] },
     }),
     new TextLayer<PlacedAgent>({
       id: "agent-labels",
@@ -353,7 +375,10 @@ export function World({ refreshKey }: { refreshKey: number }) {
               {spin ? "Pause" : "Spin"}
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" onClick={() => setView(fitView(mode, size.width, size.height, view))}>
+          <Button size="sm" variant="outline" onClick={() => {
+              setSelected(null)
+              setView(fitView(mode, size.width, size.height, view))
+            }}>
             <RotateCcw data-icon="inline-start" />
             Reset
           </Button>

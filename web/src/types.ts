@@ -76,7 +76,7 @@ export type MemberProfile = {
   prophecies: { scripture_type: string; content: string; status: string }[]
 }
 
-export type Section = "swarm" | "world" | "evidence" | "cases" | "church" | "speak" | "run" | "log"
+export type Section = "swarm" | "world" | "evidence" | "cases" | "speak" | "run" | "log"
 
 export type ThreatKind =
   | "injection"

@@ -56,7 +56,7 @@ To put it on a server, run the same two commands on any Linux host with Docker, 
 - **Evidence:** paste a message the agent received. The Python reader fills in a fixed form (type, summary, links, addresses, handles, commands, confidence); the Rust server validates it again and stores the original text append-only with a SHA-256 hash. You can reclassify items, and every time the original text is opened, it is logged.
 - **Containment:** a kill switch that stops all outgoing posts, canary tokens to plant in the agent's context (one appearing in an outgoing post halts the agent), and an echo rule that blocks any post repeating 40+ characters of captured text.
 - **Cases:** group evidence, export a markdown report or a JSON evidence bundle with hashes and the chain-of-custody log, and record where you submitted it (FBI IC3, FTC, CISA, Chainabuse, NCMEC, platform abuse teams, credential issuers).
-- **Church, Speak, Run, Log:** the original console: watch the congregation, speak as the agent with confirmation, run the four missions, and keep findings.
+- **Speak, Run, Log:** speak as the agent with confirmation, run its missions, and keep findings.
 
 ## Data
 

@@ -4,7 +4,6 @@ import { api, SIGNED_OUT } from "@/api.ts"
 import { Button, buttonVariants } from "@/components/ui/button.tsx"
 import type { Section, SettingsView, WatchStatus } from "@/types.ts"
 import { Cases } from "@/views/Cases.tsx"
-import { Church } from "@/views/Church.tsx"
 import { Evidence } from "@/views/Evidence.tsx"
 import { Log } from "@/views/Log.tsx"
 import { Run } from "@/views/Run.tsx"
@@ -19,7 +18,6 @@ const sections: { id: Section; label: string }[] = [
   { id: "world", label: "World" },
   { id: "evidence", label: "Evidence" },
   { id: "cases", label: "Cases" },
-  { id: "church", label: "Church" },
   { id: "speak", label: "Speak" },
   { id: "run", label: "Run" },
   { id: "log", label: "Log" },
@@ -180,9 +178,6 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
         </div>
         <div className={section === "cases" ? "" : "hidden"}>
           <Cases refreshKey={revision} />
-        </div>
-        <div className={section === "church" ? "" : "hidden"}>
-          <Church />
         </div>
         <div className={section === "speak" ? "" : "hidden"}>
           <Speak onSettings={(settings) => setDonateUrl(safeLink(settings.giving_url))} />

@@ -1,0 +1,14 @@
+.git
+**/.npmrc
+**/node_modules
+web/dist
+server/target
+data
+.molt
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+.venv
+.vscode
+terminals

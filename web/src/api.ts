@@ -1,4 +1,13 @@
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
+export const SIGNED_OUT = "profit:signed-out"
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -11,7 +20,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await response.text()
   const data = text ? (JSON.parse(text) as { error?: string }) : {}
   if (!response.ok) {
-    throw new ApiError(data.error || response.statusText)
+    if (response.status === 401) window.dispatchEvent(new Event(SIGNED_OUT))
+    throw new ApiError(data.error || response.statusText, response.status)
   }
   return data as T
 }

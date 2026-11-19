@@ -190,6 +190,7 @@ impl Watch {
             .arg("-I")
             .arg(script)
             .env_clear()
+            .env("PATH", std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".into()))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

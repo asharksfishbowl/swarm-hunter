@@ -1,0 +1,16 @@
+services:
+  profit:
+    build: .
+    image: swarm-milker:latest
+    environment:
+      PROFIT_ACCESS_TOKEN: ${PROFIT_ACCESS_TOKEN:?Set PROFIT_ACCESS_TOKEN (16+ characters) in .env or your shell}
+      PROFIT_SECURE_COOKIE: ${PROFIT_SECURE_COOKIE:-0}
+    ports:
+      - "${PROFIT_BIND:-127.0.0.1}:43124:43124"
+    volumes:
+      - profit-data:/app/data
+    restart: unless-stopped
+    mem_limit: 512m
+
+volumes:
+  profit-data:

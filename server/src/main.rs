@@ -1,3 +1,4 @@
+mod auth;
 mod molt;
 mod rules;
 mod store;
@@ -14,7 +15,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use store::{Settings, Store};
-use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use watch::Watch;
 
@@ -24,6 +24,13 @@ const DAILY_CAP: usize = 3;
 struct AppState {
     store: Store,
     watch: Watch,
+    auth: auth::Auth,
+}
+
+impl FromRef<AppState> for auth::Auth {
+    fn from_ref(state: &AppState) -> Self {
+        state.auth.clone()
+    }
 }
 
 impl FromRef<AppState> for Store {
@@ -45,13 +52,24 @@ async fn main() {
         .unwrap_or_else(|_| PathBuf::from("."));
     let store = Store::open(&root);
     let watch = Watch::open(&root).await;
+    let auth = auth::Auth::from_env();
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
+    let loopback = matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1");
+    if !loopback && !auth.required() {
+        eprintln!("Refusing to listen on {host} without PROFIT_ACCESS_TOKEN. Set a token of 16+ characters, or use HOST=127.0.0.1.");
+        std::process::exit(1);
+    }
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(43124);
 
+    let state = AppState { store, watch, auth: auth.clone() };
     let api = Router::new()
         .route("/api/health", get(health))
+        .route("/api/auth", get(auth::status))
+        .route("/api/login", post(auth::login))
+        .route("/api/logout", post(auth::logout))
         .route("/api/church", get(church))
         .route("/api/member/:name", get(member))
         .route("/api/settings", get(get_settings).put(put_settings))
@@ -74,8 +92,7 @@ async fn main() {
         .route("/api/cases/:id", axum::routing::patch(watch::update_case))
         .route("/api/cases/:id/export.md", get(watch::export_case))
         .route("/api/cases/:id/export.json", get(watch::export_case_json))
-        .layer(CorsLayer::permissive())
-        .with_state(AppState { store, watch });
+        .with_state(state);
 
     let dist = root.join("web/dist");
     let app = if dist.join("index.html").exists() {
@@ -84,11 +101,15 @@ async fn main() {
     } else {
         api
     };
+    let app = app.layer(axum::middleware::from_fn_with_state(auth.clone(), auth::guard));
 
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+    let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .expect("bind");
-    println!("profit api http://127.0.0.1:{port}");
+    println!(
+        "profit api http://{host}:{port} ({})",
+        if auth.required() { "access token required" } else { "open, loopback only" }
+    );
     axum::serve(listener, app).await.expect("serve");
 }
 

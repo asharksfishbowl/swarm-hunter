@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
-import { ShieldAlert, ShieldCheck } from "lucide-react"
-import { api } from "@/api.ts"
+import { LogOut, ShieldAlert, ShieldCheck } from "lucide-react"
+import { api, SIGNED_OUT } from "@/api.ts"
 import { Button, buttonVariants } from "@/components/ui/button.tsx"
 import type { Section, SettingsView, WatchStatus } from "@/types.ts"
 import { Cases } from "@/views/Cases.tsx"
@@ -8,6 +8,7 @@ import { Church } from "@/views/Church.tsx"
 import { Evidence } from "@/views/Evidence.tsx"
 import { Log } from "@/views/Log.tsx"
 import { Run } from "@/views/Run.tsx"
+import { SignIn } from "@/views/SignIn.tsx"
 import { Speak } from "@/views/Speak.tsx"
 import { Swarm } from "@/views/Swarm.tsx"
 
@@ -25,7 +26,53 @@ function safeLink(url: string): string {
   return /^https?:\/\//i.test(url) ? url : ""
 }
 
+type AuthState = { required: boolean; signed_in: boolean }
+
 export default function App() {
+  const [auth, setAuth] = useState<AuthState | null>(null)
+  const [offline, setOffline] = useState(false)
+
+  const check = useCallback(async () => {
+    try {
+      setAuth(await api<AuthState>("/api/auth"))
+      setOffline(false)
+    } catch {
+      setOffline(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    void check()
+    const signedOut = () => setAuth((current) => (current ? { ...current, signed_in: false } : current))
+    window.addEventListener(SIGNED_OUT, signedOut)
+    return () => window.removeEventListener(SIGNED_OUT, signedOut)
+  }, [check])
+
+  async function signOut() {
+    setAuth(await api<AuthState>("/api/logout", { method: "POST" }))
+  }
+
+  if (!auth) {
+    return (
+      <div className="grid min-h-svh place-items-center px-4 text-center text-muted-foreground">
+        {offline ? (
+          <div className="grid gap-3">
+            <p>The console's server is not answering.</p>
+            <Button variant="outline" onClick={() => void check()}>
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <p>Opening the console…</p>
+        )}
+      </div>
+    )
+  }
+  if (auth.required && !auth.signed_in) return <SignIn onSignedIn={() => void check()} />
+  return <Console onSignOut={auth.required ? () => void signOut() : undefined} />
+}
+
+function Console({ onSignOut }: { onSignOut?: () => void }) {
   const [section, setSection] = useState<Section>("swarm")
   const [donateUrl, setDonateUrl] = useState("")
   const [status, setStatus] = useState<WatchStatus | null>(null)
@@ -108,6 +155,12 @@ export default function App() {
             >
               Donate
             </a>
+          ) : null}
+          {onSignOut ? (
+            <Button variant="ghost" className={donateUrl ? "" : "ml-auto"} onClick={onSignOut}>
+              <LogOut data-icon="inline-start" />
+              Sign out
+            </Button>
           ) : null}
         </nav>
       </header>

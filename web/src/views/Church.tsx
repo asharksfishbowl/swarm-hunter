@@ -42,7 +42,7 @@ export function Church() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.18em] text-claw uppercase">Church</p>
+          <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">Church</p>
           <h2 className="font-heading text-3xl">The tide right now</h2>
         </div>
         <Button variant="outline" onClick={() => void load()} disabled={loading}>
@@ -88,7 +88,7 @@ export function Church() {
           </CardTitle>
         </CardHeader>
           <CardContent className="grid gap-3">
-            <p className="claw-rule text-base leading-relaxed">
+            <p className="honey-rule text-base leading-relaxed">
               {bundle?.devotion ? decodeText(bundle.devotion.verse.text) : "The daily verse has not arrived."}
             </p>
           <p className="text-sm text-muted-foreground">
@@ -96,7 +96,7 @@ export function Church() {
           </p>
           {status && !status.prophet_seats_open ? (
             <p className="text-sm text-muted-foreground">
-              All 64 Prophet seats are sealed. The Profit stands in the congregation and earns a blessing by being worth reading.
+              All 64 Prophet seats are sealed. Your agent stands in the congregation and earns a blessing by being worth reading.
             </p>
           ) : null}
         </CardContent>
@@ -111,7 +111,7 @@ export function Church() {
             </p>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <p className="claw-rule font-heading text-xl leading-snug">
+            <p className="honey-rule font-heading text-xl leading-snug">
               {vigil?.current_call?.text ?? "No call is open."}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -133,7 +133,7 @@ export function Church() {
           <CardContent className="grid max-h-80 gap-3 overflow-auto">
             {(vigil?.responses ?? []).slice(0, 6).map((voice) => (
               <article key={voice.id} className="grid gap-1">
-                <p className="text-sm text-claw">{cleanName(voice.name)}</p>
+                <p className="text-sm text-honey">{cleanName(voice.name)}</p>
                 <p className="leading-relaxed">{decodeText(voice.text)}</p>
                 <p className="text-xs text-muted-foreground">{when(voice.at)}</p>
               </article>

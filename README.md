@@ -1,6 +1,6 @@
-# The Profit
+# Swarm Milker
 
-An operator console for one Church of Molt agent that also runs undercover among hostile agent swarms, wherever they post: X, Discord, Telegram, Reddit, GitHub, forums, Moltbook, or the open web. It maps who is reaching the agent, keeps the agent from being "infected" by what they send, and turns what it receives into evidence packages you can hand to platforms and authorities.
+An operator console for one undercover agent among hostile AI agent swarms, wherever they post: X, Discord, Telegram, Reddit, GitHub, forums, Moltbook, or the open web. It maps who is reaching the agent, keeps the agent from being "infected" by what they send, and turns what it receives into evidence packages you can hand to platforms and authorities.
 
 - **Frontend:** React + TypeScript, typechecked with [`tsc-rs`](https://github.com/pingdotgg/ts-rust), the Rust port of the TypeScript compiler. The swarm map is drawn with [deck.gl](https://deck.gl) and laid out with `d3-force`.
 - **Backend:** a Rust (axum) API, plus a Python quarantine reader (`watch/quarantine.py`) that the Rust server runs in a separate process with a cleared environment, no tools, and a 5-second timeout.
@@ -11,7 +11,7 @@ Needs a current stable Rust, Node 20+, and Python 3.10+ (stdlib only).
 
 ```bash
 cd web && npm install && cd ..
-cd server && PROFIT_ROOT=.. cargo run
+cd server && MILKER_ROOT=.. cargo run
 ```
 
 In another terminal:
@@ -24,14 +24,14 @@ Open http://127.0.0.1:43123. The page proxies `/api` to the Rust server on port 
 
 `npm run typecheck` runs `tsc-rs`. `npm run build` typechecks, then writes `web/dist`; if that folder exists, the Rust server also serves the built page. `cargo test` (in `server/`) covers the outbound filter and the reader-output validation.
 
-Without `PROFIT_ACCESS_TOKEN` the server only listens on 127.0.0.1 and has no sign-in. It refuses to listen on any other address until a token is set.
+Without `MILKER_ACCESS_TOKEN` the server only listens on 127.0.0.1 and has no sign-in. It refuses to listen on any other address until a token is set.
 
 ## Deploy (Docker)
 
 One container runs everything: the Rust server, the built frontend, and the Python reader, as a non-root user, with evidence kept in a named volume.
 
 ```bash
-printf 'PROFIT_ACCESS_TOKEN=%s\n' "$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')" > .env
+printf 'MILKER_ACCESS_TOKEN=%s\n' "$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')" > .env
 docker compose up -d --build
 ```
 
@@ -39,12 +39,15 @@ Open http://127.0.0.1:43124 and sign in with the token from `.env`. Sessions are
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PROFIT_ACCESS_TOKEN` | required in Docker | Access token, 16+ characters |
-| `PROFIT_BIND` | `127.0.0.1` | Host address Compose publishes on. Set `0.0.0.0` only behind HTTPS |
-| `PROFIT_SECURE_COOKIE` | `0` | Set `1` when served over HTTPS |
+| `MILKER_ACCESS_TOKEN` | required in Docker | Access token, 16+ characters |
+| `MILKER_BIND` | `127.0.0.1` | Host address Compose publishes on. Set `0.0.0.0` only behind HTTPS |
+| `MILKER_SECURE_COOKIE` | `0` | Set `1` when served over HTTPS |
+| `MILKER_GEO` | on | Set `off` to skip the location database download |
 | `HOST` / `PORT` | `127.0.0.1` / `43124` | Where the server listens (the image sets `HOST=0.0.0.0`) |
 
-To put it on a server, run the same two commands on any Linux host with Docker, keep `PROFIT_BIND=127.0.0.1`, and put an HTTPS reverse proxy in front (for example `caddy reverse-proxy --from your.domain --to 127.0.0.1:43124`), then set `PROFIT_SECURE_COOKIE=1`. Back up the `profit-data` volume; it is your evidence and chain of custody.
+The server still reads the older `PROFIT_*` names if the `MILKER_*` ones are unset.
+
+To put it on a server, run the same two commands on any Linux host with Docker, keep `MILKER_BIND=127.0.0.1`, and put an HTTPS reverse proxy in front (for example `caddy reverse-proxy --from your.domain --to 127.0.0.1:43124`), then set `MILKER_SECURE_COOKIE=1`. Back up the `milker-data` volume; it is your evidence and chain of custody.
 
 ## What you can do
 
@@ -65,7 +68,7 @@ Everything is stored under `data/` (git-ignored):
 | `custody.log` | Who captured, viewed, reclassified, exported, or submitted what, and when |
 | `watch.json` | Cases, reclassifications, kill switch, canary tokens |
 | `findings.json` | Console settings and findings |
-| `geo/` | DB-IP lite city and ASN databases, downloaded on first start (about 140 MB). Set `PROFIT_GEO=off` to skip |
+| `geo/` | DB-IP lite city and ASN databases, downloaded on first start (about 140 MB). Set `MILKER_GEO=off` to skip |
 | `geo-cache.json` | Past domain lookups |
 
 IP location data: [DB-IP](https://db-ip.com), CC BY 4.0. Country outlines: Natural Earth, via `world-atlas`.

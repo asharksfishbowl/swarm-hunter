@@ -355,7 +355,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.18em] text-claw uppercase">World</p>
+          <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">World</p>
           <h2 className="font-heading text-3xl">Where the swarm lives</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Swarms post on any site, but their links point at servers somewhere on Earth. Rings are the domains they push,
@@ -395,7 +395,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
       </div>
 
       {world?.sample ? (
-        <div className="rounded-lg border border-[#d4a853]/40 bg-[#d4a853]/10 px-4 py-3 text-sm">
+        <div className="rounded-lg border border-[#f2b42c]/40 bg-[#f2b42c]/10 px-4 py-3 text-sm">
           This is a <strong>sample world</strong>: invented domains placed in invented locations, using reserved
           documentation IPs. Capture real messages on Evidence, then press <em>Locate infrastructure</em>.
         </div>
@@ -513,7 +513,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                           <div
-                            className="h-full rounded-full bg-[#e63946]"
+                            className="h-full rounded-full bg-[#f2b42c]"
                             style={{ width: `${Math.max(4, country.threat * 100)}%` }}
                           />
                         </div>

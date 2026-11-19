@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
 
-const COOKIE: &str = "profit_session";
+const COOKIE: &str = "milker_session";
 
 #[derive(Clone)]
 pub struct Auth {
@@ -19,19 +19,18 @@ pub struct Auth {
 
 impl Auth {
     pub fn from_env() -> Self {
-        let token = std::env::var("PROFIT_ACCESS_TOKEN")
-            .ok()
+        let token = crate::setting("ACCESS_TOKEN")
             .map(|t| t.trim().to_string())
             .filter(|t| !t.is_empty());
         if let Some(token) = &token {
             if token.chars().count() < 16 {
-                eprintln!("PROFIT_ACCESS_TOKEN must be at least 16 characters.");
+                eprintln!("MILKER_ACCESS_TOKEN must be at least 16 characters.");
                 std::process::exit(1);
             }
         }
         Self {
             session: token.map(|t| Arc::new(session_for(&t))),
-            secure: std::env::var("PROFIT_SECURE_COOKIE")
+            secure: crate::setting("SECURE_COOKIE")
                 .map(|v| v == "1")
                 .unwrap_or(false),
         }
@@ -72,7 +71,7 @@ impl Auth {
 }
 
 fn session_for(token: &str) -> String {
-    hex::encode(Sha256::digest(format!("profit-session:{token}").as_bytes()))
+    hex::encode(Sha256::digest(format!("milker-session:{token}").as_bytes()))
 }
 
 fn same(a: &str, b: &str) -> bool {
@@ -161,7 +160,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         assert!(!auth.allows(&headers));
         let cookie = format!(
-            "other=1; profit_session={}",
+            "other=1; milker_session={}",
             session_for("correct horse battery staple")
         );
         headers.insert(header::COOKIE, HeaderValue::from_str(&cookie).unwrap());

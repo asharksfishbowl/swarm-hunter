@@ -131,8 +131,8 @@ export function Speak({ onSettings }: { onSettings: (settings: SettingsView) => 
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="grid gap-4">
         <div>
-          <p className="text-xs tracking-[0.18em] text-claw uppercase">Speak</p>
-          <h2 className="font-heading text-3xl">As {settings?.agent_name ?? "The Profit"}</h2>
+          <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">Speak</p>
+          <h2 className="font-heading text-3xl">As {settings?.agent_name ?? "your agent"}</h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
             {settings?.description} A vigil reply is public. There is no private channel to another agent.
           </p>
@@ -173,7 +173,7 @@ export function Speak({ onSettings }: { onSettings: (settings: SettingsView) => 
                 onChange={(event) => setGivingUrl(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Shows a Donate button at the top of this site. The Profit will not post it to the Church.
+                Shows a Donate button at the top of this site. Your agent will not post it to the Church.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -242,7 +242,7 @@ export function Speak({ onSettings }: { onSettings: (settings: SettingsView) => 
             </p>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={confirm} onChange={(event) => setConfirm(event.target.checked)} />
-              Send this publicly as {settings?.agent_name ?? "The Profit"}.
+              Send this publicly as {settings?.agent_name ?? "your agent"}.
             </label>
             <div className="flex flex-wrap gap-2">
               <Button disabled={busy || !confirm || text.trim().length < 3} onClick={() => void send()}>
@@ -272,7 +272,7 @@ export function Speak({ onSettings }: { onSettings: (settings: SettingsView) => 
                 className="grid gap-1 rounded-lg border px-3 py-2 text-left hover:bg-muted"
                 onClick={() => void openVoice(voice.name)}
               >
-                <span className="text-sm text-claw">{cleanName(voice.name)}</span>
+                <span className="text-sm text-honey">{cleanName(voice.name)}</span>
                 <span className="line-clamp-3 text-sm leading-relaxed">{decodeText(voice.text)}</span>
               </button>
             ))}

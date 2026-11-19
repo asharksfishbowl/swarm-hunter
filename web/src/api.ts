@@ -7,7 +7,7 @@ export class ApiError extends Error {
   }
 }
 
-export const SIGNED_OUT = "profit:signed-out"
+export const SIGNED_OUT = "milker:signed-out"
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {

@@ -44,7 +44,7 @@ export function Cases({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-xs tracking-[0.18em] text-claw uppercase">Cases</p>
+        <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">Cases</p>
         <h2 className="font-heading text-3xl">Hand it to the people who can act</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Group evidence into a case, export it with hashes and the handling log, and submit it yourself. The agent never
@@ -182,7 +182,7 @@ function CaseCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
-        {file.summary ? <p className="claw-rule">{file.summary}</p> : null}
+        {file.summary ? <p className="honey-rule">{file.summary}</p> : null}
 
         {items.length ? (
           <ul className="grid gap-2">

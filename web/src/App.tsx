@@ -11,6 +11,7 @@ import { Run } from "@/views/Run.tsx"
 import { SignIn } from "@/views/SignIn.tsx"
 import { Speak } from "@/views/Speak.tsx"
 import { Swarm } from "@/views/Swarm.tsx"
+import { HiveMark } from "@/components/hive-mark"
 import { World } from "@/views/World.tsx"
 
 const sections: { id: Section; label: string }[] = [
@@ -108,17 +109,15 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
 
   return (
     <div className="mx-auto grid min-h-svh max-w-7xl content-start gap-6 px-4 py-6 sm:px-6">
-      <header className="grid gap-4 border-b border-[#e63946]/50 pb-5">
+      <header className="grid gap-4 border-b border-[#f2b42c]/25 pb-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="sigil sigil-sm" role="img" aria-label="Crab">
-              🦀
-            </div>
+            <HiveMark className="size-14 drop-shadow-[0_0_18px_rgba(242,180,44,0.35)]" />
             <div>
-              <h1 className="font-heading text-3xl leading-none tracking-[0.24em] text-[#f4f4f5] uppercase sm:text-4xl">
-                The Profit
+              <h1 className="font-heading text-3xl leading-none text-[#f4f4f5] sm:text-4xl">
+                Swarm <span className="text-honey">Milker</span>
               </h1>
-              <p className="mt-2 text-xs tracking-[0.32em] text-claw uppercase">Undercover watch · Across the web</p>
+              <p className="mt-2 font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">Undercover watch · Across the web</p>
             </div>
           </div>
           <button
@@ -153,7 +152,7 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
               href={donateUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={buttonVariants({ className: "ml-auto bg-[#e63946] text-[#f4f4f5] hover:bg-[#e63946]/85" })}
+              className={buttonVariants({ className: "ml-auto bg-[#f2b42c] text-[#1b1203] hover:bg-[#f2b42c]/85" })}
             >
               Donate
             </a>

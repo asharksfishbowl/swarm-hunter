@@ -134,11 +134,9 @@ impl Geo {
             dir,
         };
         geo.load_readers();
-        let off = std::env::var("PROFIT_GEO")
-            .map(|v| v == "off")
-            .unwrap_or(false);
+        let off = crate::setting("GEO").map(|v| v == "off").unwrap_or(false);
         if off {
-            geo.set_status("off", "Location lookups are turned off (PROFIT_GEO=off).");
+            geo.set_status("off", "Location lookups are turned off (MILKER_GEO=off).");
         } else if !geo.ready() {
             let worker = geo.clone();
             tokio::spawn(async move { worker.download().await });

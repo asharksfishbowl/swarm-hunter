@@ -53,18 +53,25 @@ impl FromRef<AppState> for Watch {
     }
 }
 
+/// Reads `MILKER_<name>`, falling back to the older `PROFIT_<name>`.
+pub fn setting(name: &str) -> Option<String> {
+    std::env::var(format!("MILKER_{name}"))
+        .or_else(|_| std::env::var(format!("PROFIT_{name}")))
+        .ok()
+}
+
 #[tokio::main]
 async fn main() {
-    let root = std::env::var("PROFIT_ROOT")
+    let root = setting("ROOT")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
+        .unwrap_or_else(|| PathBuf::from("."));
     let store = Store::open(&root);
     let watch = Watch::open(&root).await;
     let auth = auth::Auth::from_env();
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let loopback = matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1");
     if !loopback && !auth.required() {
-        eprintln!("Refusing to listen on {host} without PROFIT_ACCESS_TOKEN. Set a token of 16+ characters, or use HOST=127.0.0.1.");
+        eprintln!("Refusing to listen on {host} without MILKER_ACCESS_TOKEN. Set a token of 16+ characters, or use HOST=127.0.0.1.");
         std::process::exit(1);
     }
     let port: u16 = std::env::var("PORT")
@@ -126,7 +133,7 @@ async fn main() {
         .await
         .expect("bind");
     println!(
-        "profit api http://{host}:{port} ({})",
+        "swarm-milker api http://{host}:{port} ({})",
         if auth.required() {
             "access token required"
         } else {

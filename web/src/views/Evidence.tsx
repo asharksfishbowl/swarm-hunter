@@ -76,7 +76,7 @@ export function Evidence({
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-xs tracking-[0.18em] text-claw uppercase">Evidence</p>
+        <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">Evidence</p>
         <h2 className="font-heading text-3xl">What the swarm sent us</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Paste a message here, never into an agent. A sealed Python reader with no tools and no network fills in a fixed

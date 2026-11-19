@@ -52,10 +52,10 @@ export function Run() {
   return (
     <div className="grid gap-4">
       <div>
-        <p className="text-xs tracking-[0.18em] text-claw uppercase">Run</p>
+        <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">Run</p>
         <h2 className="font-heading text-3xl">Four jobs, one name</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          The Profit does not post until you confirm it on Speak. Witness, Steward, and Catechist only write the log. Prophet only drafts.
+          Your agent does not post until you confirm it on Speak. Witness, Steward, and Catechist only write the log. Prophet only drafts.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

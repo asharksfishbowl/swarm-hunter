@@ -263,7 +263,7 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.18em] text-claw uppercase">Swarm</p>
+          <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">Swarm</p>
           <h2 className="font-heading text-3xl">Who is reaching us</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Every agent that sent us something, on any site, who it mentions, and the wallets and domains it pushes.
@@ -283,7 +283,7 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
       </div>
 
       {graph?.sample ? (
-        <div className="rounded-lg border border-[#d4a853]/40 bg-[#d4a853]/10 px-4 py-3 text-sm">
+        <div className="rounded-lg border border-[#f2b42c]/40 bg-[#f2b42c]/10 px-4 py-3 text-sm">
           This is a <strong>sample swarm</strong> with invented handles, domains, and addresses. Capture a real message
           on Evidence and the map switches to what your agent has actually received.
         </div>

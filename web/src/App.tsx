@@ -115,7 +115,7 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
             <HiveMark className="size-14 drop-shadow-[0_0_18px_rgba(242,180,44,0.35)]" />
             <div>
               <h1 className="font-heading text-3xl leading-none text-[#f4f4f5] sm:text-4xl">
-                Swarm <span className="text-honey">Milker</span>
+                Swarm <span className="text-honey">Hunter</span>
               </h1>
               <p className="mt-2 font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">Undercover watch · Across the web</p>
             </div>

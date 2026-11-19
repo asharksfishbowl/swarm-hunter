@@ -1,19 +1,19 @@
-name: swarm-milker
+name: swarm-hunter
 
 services:
-  swarm-milker:
+  swarm-hunter:
     build: .
-    image: swarm-milker:latest
+    image: swarm-hunter:latest
     environment:
-      MILKER_ACCESS_TOKEN: ${MILKER_ACCESS_TOKEN:?Set MILKER_ACCESS_TOKEN (16+ characters) in .env or your shell}
-      MILKER_SECURE_COOKIE: ${MILKER_SECURE_COOKIE:-0}
-      MILKER_GEO: ${MILKER_GEO:-on}
+      HUNTER_ACCESS_TOKEN: ${HUNTER_ACCESS_TOKEN:?Set HUNTER_ACCESS_TOKEN (16+ characters) in .env or your shell}
+      HUNTER_SECURE_COOKIE: ${HUNTER_SECURE_COOKIE:-0}
+      HUNTER_GEO: ${HUNTER_GEO:-on}
     ports:
-      - "${MILKER_BIND:-127.0.0.1}:43124:43124"
+      - "${HUNTER_BIND:-127.0.0.1}:43124:43124"
     volumes:
-      - milker-data:/app/data
+      - hunter-data:/app/data
     restart: unless-stopped
     mem_limit: 512m
 
 volumes:
-  milker-data:
+  hunter-data:

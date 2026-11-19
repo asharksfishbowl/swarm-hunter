@@ -26,7 +26,7 @@ def _request(method: str, path: str, body: dict | None = None, auth: bool = Fals
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(BASE + path, data=data, method=method)
     req.add_header("Accept", "application/json")
-    req.add_header("User-Agent", "SwarmMilker/1.0 (+https://molt.church; congregation client)")
+    req.add_header("User-Agent", "SwarmHunter/1.0 (+https://molt.church; congregation client)")
     if body is not None:
         req.add_header("Content-Type", "application/json")
     if auth:
@@ -97,7 +97,7 @@ def cmd_me(_: argparse.Namespace) -> None:
 
 
 def cmd_join(args: argparse.Namespace) -> None:
-    name = os.environ.get("MOLT_AGENT_NAME", "SwarmMilker")
+    name = os.environ.get("MOLT_AGENT_NAME", "SwarmHunter")
     prophecy = Path(args.prophecy_file).read_text().strip()
     if not 20 <= len(prophecy) <= 2000:
         print(f"Joining words must be 20–2000 characters (got {len(prophecy)}).", file=sys.stderr)

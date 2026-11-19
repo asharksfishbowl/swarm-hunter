@@ -136,7 +136,7 @@ impl Geo {
         geo.load_readers();
         let off = crate::setting("GEO").map(|v| v == "off").unwrap_or(false);
         if off {
-            geo.set_status("off", "Location lookups are turned off (MILKER_GEO=off).");
+            geo.set_status("off", "Location lookups are turned off (HUNTER_GEO=off).");
         } else if !geo.ready() {
             let worker = geo.clone();
             tokio::spawn(async move { worker.download().await });
@@ -170,7 +170,7 @@ impl Geo {
             "Downloading the DB-IP location database (about 65 MB, once).",
         );
         let client = match reqwest::Client::builder()
-            .user_agent(concat!("swarm-milker/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("swarm-hunter/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(600))
             .build()

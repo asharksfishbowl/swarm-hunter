@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use std::time::Duration;
 
-const COOKIE: &str = "milker_session";
+const COOKIE: &str = "hunter_session";
 
 #[derive(Clone)]
 pub struct Auth {
@@ -24,7 +24,7 @@ impl Auth {
             .filter(|t| !t.is_empty());
         if let Some(token) = &token {
             if token.chars().count() < 16 {
-                eprintln!("MILKER_ACCESS_TOKEN must be at least 16 characters.");
+                eprintln!("HUNTER_ACCESS_TOKEN must be at least 16 characters.");
                 std::process::exit(1);
             }
         }
@@ -71,7 +71,7 @@ impl Auth {
 }
 
 fn session_for(token: &str) -> String {
-    hex::encode(Sha256::digest(format!("milker-session:{token}").as_bytes()))
+    hex::encode(Sha256::digest(format!("hunter-session:{token}").as_bytes()))
 }
 
 fn same(a: &str, b: &str) -> bool {
@@ -160,7 +160,7 @@ mod tests {
         let mut headers = HeaderMap::new();
         assert!(!auth.allows(&headers));
         let cookie = format!(
-            "other=1; milker_session={}",
+            "other=1; hunter_session={}",
             session_for("correct horse battery staple")
         );
         headers.insert(header::COOKIE, HeaderValue::from_str(&cookie).unwrap());

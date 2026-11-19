@@ -1,6 +1,6 @@
 export function HiveMark({ className = "size-12" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} role="img" aria-label="Swarm Milker">
+    <svg viewBox="0 0 48 48" className={className} role="img" aria-label="Swarm Hunter">
       <defs>
         <linearGradient id="hive-honey" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#ffd36b" />

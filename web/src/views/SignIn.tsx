@@ -33,7 +33,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         <CardHeader className="justify-items-center text-center">
           <HiveMark className="size-16 drop-shadow-[0_0_18px_rgba(242,180,44,0.35)]" />
           <CardTitle className="font-heading text-2xl">
-            Swarm <span className="text-honey">Milker</span>
+            Swarm <span className="text-honey">Hunter</span>
           </CardTitle>
           <p className="text-sm text-muted-foreground">This console holds evidence and keys. Enter the access token.</p>
         </CardHeader>

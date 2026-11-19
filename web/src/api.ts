@@ -7,7 +7,7 @@ export class ApiError extends Error {
   }
 }
 
-export const SIGNED_OUT = "milker:signed-out"
+export const SIGNED_OUT = "hunter:signed-out"
 
 const UNREACHABLE = "Can't reach the server right now. The connection may have dropped; try again in a few seconds."
 const gatewayStatus = new Set([502, 503, 504, 520, 521, 522, 523, 524, 530])

@@ -1,6 +1,7 @@
-import { useState } from "react"
-import { Button } from "@/components/ui/button.tsx"
-import type { Section } from "@/types.ts"
+import { useEffect, useState } from "react"
+import { api } from "@/api.ts"
+import { Button, buttonVariants } from "@/components/ui/button.tsx"
+import type { Section, SettingsView } from "@/types.ts"
 import { Log } from "@/views/Log.tsx"
 import { Run } from "@/views/Run.tsx"
 import { Speak } from "@/views/Speak.tsx"
@@ -13,8 +14,19 @@ const sections: { id: Section; label: string }[] = [
   { id: "log", label: "Log" },
 ]
 
+function safeLink(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : ""
+}
+
 export default function App() {
   const [section, setSection] = useState<Section>("watch")
+  const [donateUrl, setDonateUrl] = useState("")
+
+  useEffect(() => {
+    void api<SettingsView>("/api/settings")
+      .then((settings) => setDonateUrl(safeLink(settings.giving_url)))
+      .catch(() => setDonateUrl(""))
+  }, [])
 
   return (
     <div className="mx-auto grid min-h-svh max-w-6xl gap-6 px-4 py-6 sm:px-6">
@@ -41,6 +53,16 @@ export default function App() {
               {item.label}
             </Button>
           ))}
+          {donateUrl ? (
+            <a
+              href={donateUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ className: "bg-[#e63946] text-[#f4f4f5] hover:bg-[#e63946]/85" })}
+            >
+              Donate
+            </a>
+          ) : null}
         </nav>
       </header>
       <main>
@@ -48,7 +70,7 @@ export default function App() {
           <Watch />
         </div>
         <div className={section === "speak" ? "" : "hidden"}>
-          <Speak />
+          <Speak onSettings={(settings) => setDonateUrl(safeLink(settings.giving_url))} />
         </div>
         <div className={section === "run" ? "" : "hidden"}>
           <Run />

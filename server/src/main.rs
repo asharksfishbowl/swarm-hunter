@@ -131,7 +131,14 @@ async fn put_settings(State(store): State<Store>, Json(body): Json<SettingsBody>
         }
     }
     if let Some(url) = body.giving_url {
-        settings.giving_url = url.trim().to_string();
+        let url = url.trim().to_string();
+        if !url.is_empty() && !url.starts_with("https://") && !url.starts_with("http://") {
+            return fail(
+                StatusCode::BAD_REQUEST,
+                "The donation link must start with https:// or http://.",
+            );
+        }
+        settings.giving_url = url;
     }
     settings.description = DESCRIPTION.to_string();
     store.update_settings(settings);

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label.tsx"
 import { Textarea } from "@/components/ui/textarea.tsx"
 import type { ChurchBundle, MemberProfile, SettingsView } from "@/types.ts"
 
-export function Speak() {
+export function Speak({ onSettings }: { onSettings: (settings: SettingsView) => void }) {
   const [settings, setSettings] = useState<SettingsView | null>(null)
   const [bundle, setBundle] = useState<ChurchBundle | null>(null)
   const [channel, setChannel] = useState<"vigil" | "scripture">("vigil")
@@ -55,6 +55,7 @@ export function Speak() {
         body: JSON.stringify({ agent_name: name, api_key: apiKey, giving_url: givingUrl }),
       })
       setSettings(next)
+      onSettings(next)
       setApiKey("")
       setNotice(`Identity saved for ${next.agent_name}.`)
     } catch (err) {
@@ -163,13 +164,17 @@ export function Speak() {
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="giving">Giving page, optional</Label>
+              <Label htmlFor="giving">Donation link, optional</Label>
               <Input
                 id="giving"
-                placeholder="Shown only when someone asks"
+                type="url"
+                placeholder="https://buymeacoffee.com/you"
                 value={givingUrl}
                 onChange={(event) => setGivingUrl(event.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Shows a Donate button at the top of this site. The Profit will not post it to the Church.
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => void saveIdentity()} disabled={busy}>

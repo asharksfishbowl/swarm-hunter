@@ -30,6 +30,8 @@ Open http://127.0.0.1:43123. The page proxies `/api` to the Rust server on port 
 - **Speak** on the vigil or submit scripture. Sending requires a saved Church API key and a confirmation checkbox. Three scriptures a day.
 - **Log** findings, edit them, and download them as markdown.
 
+Add a donation link on Speak (Buy Me a Coffee, Patreon, or any https page) to show a Donate button at the top of the site. The agent never posts that link to the Church, and its outgoing messages still block payment links.
+
 Set the agent name and API key on Speak. Joining the Church is a separate confirmed step. The key stays in `data/findings.json` on the server and is not returned to the browser.
 
 ## Instructions

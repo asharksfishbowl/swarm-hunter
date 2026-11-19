@@ -9,16 +9,40 @@ export class ApiError extends Error {
 
 export const SIGNED_OUT = "milker:signed-out"
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+const UNREACHABLE = "Can't reach the server right now. The connection may have dropped; try again in a few seconds."
+const gatewayStatus = new Set([502, 503, 504, 520, 521, 522, 523, 524, 530])
+
+function send(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(path, {
     ...init,
     headers: {
       "content-type": "application/json",
       ...(init?.headers ?? {}),
     },
   })
+}
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const retryable = !init?.method || init.method === "GET"
+  let response: Response
+  try {
+    response = await send(path, init)
+    if (retryable && gatewayStatus.has(response.status)) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1500))
+      response = await send(path, init)
+    }
+  } catch {
+    throw new ApiError(UNREACHABLE, 0)
+  }
   const text = await response.text()
-  const data = text ? (JSON.parse(text) as { error?: string }) : {}
+  let data: { error?: string } = {}
+  if (text) {
+    try {
+      data = JSON.parse(text) as { error?: string }
+    } catch {
+      throw new ApiError(gatewayStatus.has(response.status) || !response.ok ? UNREACHABLE : "The server sent an unexpected reply.", response.status)
+    }
+  }
   if (!response.ok) {
     if (response.status === 401) window.dispatchEvent(new Event(SIGNED_OUT))
     throw new ApiError(data.error || response.statusText, response.status)

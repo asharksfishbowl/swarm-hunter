@@ -149,6 +149,10 @@
     0 0 90px rgba(230, 57, 70, 0.35);
 }
 
+.sigil-sm {
+  font-size: clamp(44px, 9vw, 64px);
+}
+
 .text-claw {
   color: #e63946;
 }

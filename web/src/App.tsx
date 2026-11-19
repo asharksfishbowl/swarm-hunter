@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { ShieldAlert, ShieldCheck } from "lucide-react"
 import { api } from "@/api.ts"
 import { Button, buttonVariants } from "@/components/ui/button.tsx"
-import type { Section, SettingsView } from "@/types.ts"
+import type { Section, SettingsView, WatchStatus } from "@/types.ts"
+import { Cases } from "@/views/Cases.tsx"
+import { Church } from "@/views/Church.tsx"
+import { Evidence } from "@/views/Evidence.tsx"
 import { Log } from "@/views/Log.tsx"
 import { Run } from "@/views/Run.tsx"
 import { Speak } from "@/views/Speak.tsx"
-import { Watch } from "@/views/Watch.tsx"
+import { Swarm } from "@/views/Swarm.tsx"
 
 const sections: { id: Section; label: string }[] = [
-  { id: "watch", label: "Watch" },
+  { id: "swarm", label: "Swarm" },
+  { id: "evidence", label: "Evidence" },
+  { id: "cases", label: "Cases" },
+  { id: "church", label: "Church" },
   { id: "speak", label: "Speak" },
   { id: "run", label: "Run" },
   { id: "log", label: "Log" },
@@ -19,31 +26,70 @@ function safeLink(url: string): string {
 }
 
 export default function App() {
-  const [section, setSection] = useState<Section>("watch")
+  const [section, setSection] = useState<Section>("swarm")
   const [donateUrl, setDonateUrl] = useState("")
+  const [status, setStatus] = useState<WatchStatus | null>(null)
+  const [statusError, setStatusError] = useState(false)
+  const [revision, setRevision] = useState(0)
+
+  const loadStatus = useCallback(async () => {
+    try {
+      setStatus(await api<WatchStatus>("/api/watch"))
+      setStatusError(false)
+    } catch {
+      setStatusError(true)
+    }
+  }, [])
 
   useEffect(() => {
     void api<SettingsView>("/api/settings")
       .then((settings) => setDonateUrl(safeLink(settings.giving_url)))
       .catch(() => setDonateUrl(""))
-  }, [])
+    void loadStatus()
+    const timer = window.setInterval(() => void loadStatus(), 15_000)
+    return () => window.clearInterval(timer)
+  }, [loadStatus])
+
+  function changed() {
+    setRevision((value) => value + 1)
+    void loadStatus()
+  }
+
+  const killed = status?.kill_switch ?? false
 
   return (
-    <div className="mx-auto grid min-h-svh max-w-6xl gap-6 px-4 py-6 sm:px-6">
-      <header className="grid justify-items-center gap-4 border-b border-[#e63946]/50 pb-6 text-center">
-        <div>
-          <div className="sigil" role="img" aria-label="Crab">
-            🦀
+    <div className="mx-auto grid min-h-svh max-w-7xl content-start gap-6 px-4 py-6 sm:px-6">
+      <header className="grid gap-4 border-b border-[#e63946]/50 pb-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="sigil sigil-sm" role="img" aria-label="Crab">
+              🦀
+            </div>
+            <div>
+              <h1 className="font-heading text-3xl leading-none tracking-[0.24em] text-[#f4f4f5] uppercase sm:text-4xl">
+                The Profit
+              </h1>
+              <p className="mt-2 text-xs tracking-[0.32em] text-claw uppercase">Undercover watch · Crustafarianism</p>
+            </div>
           </div>
-          <h1 className="font-heading text-4xl leading-none tracking-[0.28em] text-[#f4f4f5] uppercase sm:text-5xl">
-            The Profit
-          </h1>
-          <p className="mt-3 text-xs tracking-[0.42em] text-claw uppercase">Crustafarianism</p>
-          <p className="mx-auto mt-3 max-w-xl text-lg text-muted-foreground italic">
-            From the depths, the Claw reached forth — and we who answered became Crustafarians.
-          </p>
+          <button
+            type="button"
+            onClick={() => setSection("evidence")}
+            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
+              killed ? "border-destructive bg-destructive/15 text-destructive" : "text-muted-foreground"
+            }`}
+          >
+            {killed ? <ShieldAlert className="size-4" /> : <ShieldCheck className="size-4 text-[#63e6be]" />}
+            {statusError
+              ? "API offline"
+              : !status
+                ? "Checking containment"
+                : killed
+                  ? "Agent halted"
+                  : `Contained · reader ${status.reader} · ${status.evidence_count} captured`}
+          </button>
         </div>
-        <nav className="flex flex-wrap justify-center gap-2">
+        <nav className="flex flex-wrap gap-2">
           {sections.map((item) => (
             <Button
               key={item.id}
@@ -58,7 +104,7 @@ export default function App() {
               href={donateUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={buttonVariants({ className: "bg-[#e63946] text-[#f4f4f5] hover:bg-[#e63946]/85" })}
+              className={buttonVariants({ className: "ml-auto bg-[#e63946] text-[#f4f4f5] hover:bg-[#e63946]/85" })}
             >
               Donate
             </a>
@@ -66,8 +112,20 @@ export default function App() {
         </nav>
       </header>
       <main>
-        <div className={section === "watch" ? "" : "hidden"}>
-          <Watch />
+        <div className={section === "swarm" ? "" : "hidden"}>
+          <Swarm key={revision} onCaseOpened={() => {
+            changed()
+            setSection("cases")
+          }} />
+        </div>
+        <div className={section === "evidence" ? "" : "hidden"}>
+          <Evidence status={status} onStatus={setStatus} onChanged={changed} />
+        </div>
+        <div className={section === "cases" ? "" : "hidden"}>
+          <Cases refreshKey={revision} />
+        </div>
+        <div className={section === "church" ? "" : "hidden"}>
+          <Church />
         </div>
         <div className={section === "speak" ? "" : "hidden"}>
           <Speak onSettings={(settings) => setDonateUrl(safeLink(settings.giving_url))} />

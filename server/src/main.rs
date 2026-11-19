@@ -1,8 +1,9 @@
 mod molt;
 mod rules;
 mod store;
+mod watch;
 
-use axum::extract::{Path, State};
+use axum::extract::{FromRef, Path, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -15,8 +16,27 @@ use std::path::PathBuf;
 use store::{Settings, Store};
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};
+use watch::Watch;
 
 const DAILY_CAP: usize = 3;
+
+#[derive(Clone)]
+struct AppState {
+    store: Store,
+    watch: Watch,
+}
+
+impl FromRef<AppState> for Store {
+    fn from_ref(state: &AppState) -> Self {
+        state.store.clone()
+    }
+}
+
+impl FromRef<AppState> for Watch {
+    fn from_ref(state: &AppState) -> Self {
+        state.watch.clone()
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -24,6 +44,7 @@ async fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("."));
     let store = Store::open(&root);
+    let watch = Watch::open(&root).await;
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|value| value.parse().ok())
@@ -43,8 +64,18 @@ async fn main() {
             "/api/findings/:id",
             axum::routing::patch(update_finding).delete(delete_finding),
         )
+        .route("/api/watch", get(watch::status))
+        .route("/api/watch/kill", post(watch::kill))
+        .route("/api/swarm", get(watch::swarm))
+        .route("/api/evidence", get(watch::list).post(watch::capture))
+        .route("/api/evidence/:id", axum::routing::patch(watch::classify))
+        .route("/api/evidence/:id/raw", get(watch::raw))
+        .route("/api/cases", get(watch::cases).post(watch::create_case))
+        .route("/api/cases/:id", axum::routing::patch(watch::update_case))
+        .route("/api/cases/:id/export.md", get(watch::export_case))
+        .route("/api/cases/:id/export.json", get(watch::export_case_json))
         .layer(CorsLayer::permissive())
-        .with_state(store);
+        .with_state(AppState { store, watch });
 
     let dist = root.join("web/dist");
     let app = if dist.join("index.html").exists() {
@@ -151,7 +182,11 @@ struct JoinBody {
     confirm: bool,
 }
 
-async fn join(State(store): State<Store>, Json(body): Json<JoinBody>) -> Response {
+async fn join(
+    State(store): State<Store>,
+    State(watch): State<Watch>,
+    Json(body): Json<JoinBody>,
+) -> Response {
     if !body.confirm {
         return fail(StatusCode::BAD_REQUEST, "Confirm the registration before joining.");
     }
@@ -161,6 +196,9 @@ async fn join(State(store): State<Store>, Json(body): Json<JoinBody>) -> Respons
     }
     if let Some(reason) = rules::blocked(&prophecy) {
         return fail(StatusCode::BAD_REQUEST, reason);
+    }
+    if let Some(reason) = watch.outbound_block(&prophecy) {
+        return fail(StatusCode::LOCKED, &reason);
     }
     let settings = store.settings();
     if !valid_name(&settings.agent_name) {
@@ -251,13 +289,20 @@ struct SpeakBody {
     confirm: bool,
 }
 
-async fn speak(State(store): State<Store>, Json(body): Json<SpeakBody>) -> Response {
+async fn speak(
+    State(store): State<Store>,
+    State(watch): State<Watch>,
+    Json(body): Json<SpeakBody>,
+) -> Response {
     if !body.confirm {
         return fail(StatusCode::BAD_REQUEST, "Confirm the send. Nothing was posted.");
     }
     let text = body.text.trim().to_string();
     if let Some(reason) = rules::blocked(&text) {
         return fail(StatusCode::BAD_REQUEST, reason);
+    }
+    if let Some(reason) = watch.outbound_block(&text) {
+        return fail(StatusCode::LOCKED, &reason);
     }
     let settings = store.settings();
     if settings.api_key.is_empty() {

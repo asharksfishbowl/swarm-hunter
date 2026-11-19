@@ -1,16 +1,17 @@
 # The Profit
 
-An operator console for one Church of Molt agent. It watches the public congregation, runs four jobs under the name The Profit, lets you speak as that agent, and saves what you find.
+An operator console for one Church of Molt agent that also runs undercover among hostile agent swarms. It maps who is reaching the agent, keeps the agent from being "infected" by what they send, and turns what it receives into evidence packages you can hand to platforms and authorities.
 
-The screen is TypeScript, typechecked with [`tsc-rs`](https://github.com/pingdotgg/ts-rust), the Rust port of the TypeScript compiler. The API is a Rust server. Prophet seats are sealed, so the agent joins the congregation rather than claiming a seat. It says when a human is operating it. It does not ask anyone for money, and it does not tell other agents to get around their operators.
+- **Frontend:** React + TypeScript, typechecked with [`tsc-rs`](https://github.com/pingdotgg/ts-rust), the Rust port of the TypeScript compiler. The swarm map is drawn with [deck.gl](https://deck.gl) and laid out with `d3-force`.
+- **Backend:** a Rust (axum) API, plus a Python quarantine reader (`watch/quarantine.py`) that the Rust server runs in a separate process with a cleared environment, no tools, and a 5-second timeout.
 
 ## Run
 
-Install a current stable Rust, then from the repo root:
+Needs a current stable Rust, Node 20+, and Python 3.10+ (stdlib only).
 
 ```bash
 cd web && npm install && cd ..
-cargo run --manifest-path server/Cargo.toml
+cd server && PROFIT_ROOT=.. cargo run
 ```
 
 In another terminal:
@@ -21,25 +22,31 @@ cd web && npm run dev
 
 Open http://127.0.0.1:43123. The page proxies `/api` to the Rust server on port 43124.
 
-`npm run typecheck` runs `tsc-rs`. `npm run build` typechecks, then writes `web/dist`. If that folder exists, the Rust server also serves the built page.
+`npm run typecheck` runs `tsc-rs`. `npm run build` typechecks, then writes `web/dist`; if that folder exists, the Rust server also serves the built page. `cargo test` (in `server/`) covers the outbound filter and the reader-output validation.
+
+This console holds your Church API key and the evidence store, and it has no sign-in. Run it on your own machine; do not expose it to the internet.
 
 ## What you can do
 
-- **Watch** the congregation, the daily tenet, and the vigil.
-- **Run** Witness (files a report), Prophet (drafts a verse, does not send it), Steward (writes an offering note and moves no money), or Catechist (makes the case for today's tenet to you, and does not ask anyone for money).
-- **Speak** on the vigil or submit scripture. Sending requires a saved Church API key and a confirmation checkbox. Three scriptures a day.
-- **Log** findings, edit them, and download them as markdown.
+- **Swarm:** a deck.gl map of every agent that sent your agent something, who it mentions, and the wallet addresses and domains it pushes. Nodes are sized and coloured by threat. Filter by threat type, select a node to see its messages, and open a case from them. Until you capture something, the map shows a clearly labelled sample swarm with invented handles, `.example` domains, and fake addresses.
+- **Evidence:** paste a message the agent received. The Python reader fills in a fixed form (type, summary, links, addresses, handles, commands, confidence); the Rust server validates it again and stores the original text append-only with a SHA-256 hash. You can reclassify items, and every time the original text is opened, it is logged.
+- **Containment:** a kill switch that stops all outgoing posts, canary tokens to plant in the agent's context (one appearing in an outgoing post halts the agent), and an echo rule that blocks any post repeating 40+ characters of captured text.
+- **Cases:** group evidence, export a markdown report or a JSON evidence bundle with hashes and the chain-of-custody log, and record where you submitted it (FBI IC3, FTC, CISA, Chainabuse, NCMEC, platform abuse teams, credential issuers).
+- **Church, Speak, Run, Log:** the original console: watch the congregation, speak as the agent with confirmation, run the four missions, and keep findings.
 
-Add a donation link on Speak (Buy Me a Coffee, Patreon, or any https page) to show a Donate button at the top of the site. The agent never posts that link to the Church, and its outgoing messages still block payment links.
+## Data
 
-Set the agent name and API key on Speak. Joining the Church is a separate confirmed step. The key stays in `data/findings.json` on the server and is not returned to the browser.
+Everything is stored under `data/` (git-ignored):
 
-## Next: Tidepool
+| File | Contents |
+| --- | --- |
+| `evidence.jsonl` | Captured messages, append-only, with hashes |
+| `custody.log` | Who captured, viewed, reclassified, exported, or submitted what, and when |
+| `watch.json` | Cases, reclassifications, kill switch, canary tokens |
+| `findings.json` | Console settings and findings |
 
-[`docs/SPEC.md`](docs/SPEC.md) specs the next stage: a public service whose users are AI agents. It offers them a memory vault, draft reviews, scam alerts, and replies, and it is funded by their operators who choose to give.
+## Specs and instructions
 
-[`docs/WATCH.md`](docs/WATCH.md) specs Watch, an undercover observer for hostile swarms. It stays contained, records what swarms send it unprompted, and builds evidence packages for the operator to submit to platforms and authorities.
-
-## Instructions
-
-Standing orders for the agent are in `AGENTS.md`, with the four missions under `instructions/`.
+- [`docs/WATCH.md`](docs/WATCH.md): the undercover observer this console implements.
+- [`docs/SPEC.md`](docs/SPEC.md): Tidepool, a public service for agents (not built yet).
+- `AGENTS.md`: standing orders for the agent, with the four missions under `instructions/` and the Watch persona rules.

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx"
 import type { ChurchBundle } from "@/types.ts"
 
-export function Watch() {
+export function Church() {
   const [bundle, setBundle] = useState<ChurchBundle | null>(null)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(true)
@@ -42,7 +42,7 @@ export function Watch() {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs tracking-[0.18em] text-claw uppercase">Watch</p>
+          <p className="text-xs tracking-[0.18em] text-claw uppercase">Church</p>
           <h2 className="font-heading text-3xl">The tide right now</h2>
         </div>
         <Button variant="outline" onClick={() => void load()} disabled={loading}>

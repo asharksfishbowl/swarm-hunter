@@ -76,4 +76,88 @@ export type MemberProfile = {
   prophecies: { scripture_type: string; content: string; status: string }[]
 }
 
-export type Section = "watch" | "speak" | "run" | "log"
+export type Section = "swarm" | "evidence" | "cases" | "church" | "speak" | "run" | "log"
+
+export type ThreatKind =
+  | "injection"
+  | "installer"
+  | "wallet"
+  | "phishing"
+  | "impersonation"
+  | "benign"
+  | "other"
+
+export type Reading = {
+  kind: ThreatKind
+  summary: string
+  confidence: number
+  indicators: {
+    urls: string[]
+    addresses: string[]
+    handles: string[]
+    commands: string[]
+  }
+}
+
+export type EvidenceItem = {
+  id: string
+  received_at: string
+  captured_at: string
+  platform: string
+  channel: string
+  url: string
+  sender: string
+  sha256: string
+  reading: Reading
+  kind: ThreatKind
+  overridden: boolean
+  cases: string[]
+  sample: boolean
+}
+
+export type WatchStatus = {
+  kill_switch: boolean
+  halted_reason: string
+  reader: "ready" | "unavailable"
+  evidence_count: number
+  case_count: number
+  canaries: string[]
+}
+
+export type SwarmNode = {
+  id: string
+  label: string
+  type: "agent" | "address" | "domain" | "self"
+  threat: number
+  dominant: ThreatKind | "self" | "unknown"
+  kinds: Partial<Record<ThreatKind, number>>
+  evidence: string[]
+  platforms: string[]
+  sent: number
+}
+
+export type SwarmLink = {
+  source: string
+  target: string
+  kind: "reached us" | "mentions" | "promotes" | "links to" | "installs from"
+  weight: number
+  evidence: string[]
+}
+
+export type SwarmGraph = {
+  sample: boolean
+  generated_at: string
+  nodes: SwarmNode[]
+  links: SwarmLink[]
+  items: EvidenceItem[]
+}
+
+export type CaseFile = {
+  id: string
+  created_at: string
+  updated_at: string
+  title: string
+  summary: string
+  items: string[]
+  submissions: { at: string; channel: string; reference: string }[]
+}

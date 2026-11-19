@@ -45,14 +45,18 @@ function radiusOf(node: SwarmNode): number {
 }
 
 function layout(graph: SwarmGraph): { nodes: PlacedNode[]; links: PlacedLink[] } {
-  const nodes: PlacedNode[] = graph.nodes.map((node) => ({
+  const ordered = [...graph.nodes].sort((a, b) => a.id.localeCompare(b.id))
+  const sortedLinks = [...graph.links].sort((a, b) =>
+    `${a.source}>${a.target}>${a.kind}`.localeCompare(`${b.source}>${b.target}>${b.kind}`),
+  )
+  const nodes: PlacedNode[] = ordered.map((node, index) => ({
     ...node,
-    x: Math.cos(node.id.length) * 100,
-    y: Math.sin(node.id.length * 3) * 100,
+    x: Math.cos((index / ordered.length) * Math.PI * 2) * 300,
+    y: Math.sin((index / ordered.length) * Math.PI * 2) * 300,
     radius: radiusOf(node),
     ...(node.type === "self" ? { fx: 0, fy: 0 } : {}),
   }))
-  const simLinks: (SimulationLinkDatum<PlacedNode> & { kind: SwarmLink["kind"] })[] = graph.links.map((link) => ({
+  const simLinks: (SimulationLinkDatum<PlacedNode> & { kind: SwarmLink["kind"] })[] = sortedLinks.map((link) => ({
     source: link.source,
     target: link.target,
     kind: link.kind,
@@ -62,17 +66,17 @@ function layout(graph: SwarmGraph): { nodes: PlacedNode[]; links: PlacedLink[] }
       "link",
       forceLink<PlacedNode, (typeof simLinks)[number]>(simLinks)
         .id((node) => node.id)
-        .distance((link) => (link.kind === "reached us" ? 210 : 70))
-        .strength((link) => (link.kind === "reached us" ? 0.05 : 0.6)),
+        .distance((link) => (link.kind === "reached us" ? 175 : 90))
+        .strength((link) => (link.kind === "reached us" ? 0.05 : 0.45)),
     )
-    .force("charge", forceManyBody<PlacedNode>().strength(-260))
-    .force("collide", forceCollide<PlacedNode>((node) => node.radius + 18))
+    .force("charge", forceManyBody<PlacedNode>().strength(-420))
+    .force("collide", forceCollide<PlacedNode>((node) => Math.max(node.radius + 26, node.label.length * 4.2)).strength(1).iterations(3))
     .force("center", forceCenter(0, 0))
     .stop()
   for (let tick = 0; tick < 420; tick += 1) simulation.tick()
 
   const at = new Map(nodes.map((node) => [node.id, node]))
-  const links = graph.links.flatMap((link) => {
+  const links = sortedLinks.flatMap((link) => {
     const a = at.get(link.source)
     const b = at.get(link.target)
     return a && b ? [{ ...link, from: [a.x, a.y] as [number, number], to: [b.x, b.y] as [number, number] }] : []
@@ -86,8 +90,8 @@ function fit(nodes: PlacedNode[], width: number, height: number): ViewState {
   const xs = nodes.map((node) => node.x)
   const ys = nodes.map((node) => node.y)
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
-  const spanX = maxX - minX + 160
-  const spanY = maxY - minY + 160
+  const spanX = maxX - minX + 200
+  const spanY = maxY - minY + 120
   const zoom = Math.log2(Math.min(width / spanX, height / spanY))
   return { target: [(minX + maxX) / 2, (minY + maxY) / 2, 0], zoom: Math.min(1.5, zoom), ...base }
 }
@@ -155,6 +159,7 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
     return set
   }, [focus, visible.links])
 
+  const scale = 2 ** viewState.zoom
   const layers = [
     new LineLayer<PlacedLink>({
       id: "links",
@@ -176,7 +181,8 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
       data: visible.nodes.filter((node) => node.threat >= 0.8),
       getPosition: (node) => [node.x, node.y],
       getRadius: (node) => node.radius * 2.2,
-      radiusUnits: "pixels",
+      radiusUnits: "common",
+      radiusMinPixels: 6,
       getFillColor: (node) => [...kindColor(node.dominant), neighbours && !neighbours.has(node.id) ? 6 : 38] as [number, number, number, number],
       updateTriggers: { getFillColor: [focus] },
     }),
@@ -187,7 +193,8 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
       stroked: true,
       getPosition: (node) => [node.x, node.y],
       getRadius: (node) => node.radius,
-      radiusUnits: "pixels",
+      radiusUnits: "common",
+      radiusMinPixels: 4,
       lineWidthUnits: "pixels",
       getLineWidth: (node) => (node.id === selected ? 3 : node.type === "agent" ? 1 : 2),
       getFillColor: (node) => {
@@ -210,15 +217,18 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
       data: visible.nodes,
       getPosition: (node) => [node.x, node.y],
       getText: (node) => (node.type === "self" ? `${node.label} (us)` : node.label),
-      getPixelOffset: (node) => [0, node.radius + 11],
-      getSize: (node) => (node.type === "agent" || node.type === "self" ? 13 : 11),
+      getPixelOffset: (node) => [0, (node.radius + 11) * scale],
+      getSize: (node) => (node.type === "agent" || node.type === "self" ? 13 : 12),
+      sizeUnits: "common",
+      sizeMinPixels: 11,
+      sizeMaxPixels: 20,
       getColor: (node) => [228, 228, 231, neighbours && !neighbours.has(node.id) ? 50 : 230],
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       characterSet: "auto",
       outlineWidth: 3,
       outlineColor: [3, 3, 4, 255],
       fontSettings: { sdf: true },
-      updateTriggers: { getColor: [focus] },
+      updateTriggers: { getColor: [focus], getPixelOffset: [scale] },
     }),
   ]
 
@@ -317,7 +327,7 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div
           ref={frame}
-          className="relative h-[58vh] min-h-[360px] overflow-hidden rounded-xl border bg-[#060608]"
+          className="relative h-[68vh] min-h-[420px] overflow-hidden rounded-xl border bg-[#060608]"
           style={{ cursor: hovered ? "pointer" : "grab" }}
         >
           {size.width > 0 && placed.nodes.length > 0 ? (
@@ -341,17 +351,9 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
               Nothing has reached the agent yet.
             </div>
           ) : null}
-          <div className="pointer-events-none absolute bottom-3 left-3 grid gap-1 rounded-md bg-black/60 px-3 py-2 text-[11px] text-muted-foreground">
-            <span>● filled: agent · ○ hollow: wallet or domain</span>
-            <span>
-              <span style={{ color: "rgb(212 168 83)" }}>━</span> promotes ·{" "}
-              <span style={{ color: "rgb(255 122 69)" }}>━</span> links / installs ·{" "}
-              <span style={{ color: "rgb(120 140 170)" }}>━</span> mentions
-            </span>
-          </div>
         </div>
 
-        <Card className="max-h-[58vh] min-h-[360px] overflow-auto">
+        <Card className="max-h-[68vh] min-h-[420px] overflow-auto">
           {node ? (
             <NodeDetail key={node.id} node={node} items={items} onCaseOpened={onCaseOpened} />
           ) : (
@@ -363,7 +365,14 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
           )}
         </Card>
       </div>
-      {graph ? <p className="text-xs text-muted-foreground">Built {when(graph.generated_at)}</p> : null}
+      <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          ● filled: agent · ○ hollow: wallet or domain · <span style={{ color: "rgb(212 168 83)" }}>━</span> promotes ·{" "}
+          <span style={{ color: "rgb(255 122 69)" }}>━</span> links or installs from ·{" "}
+          <span style={{ color: "rgb(120 140 170)" }}>━</span> mentions
+        </span>
+        {graph ? <span>Built {when(graph.generated_at)}</span> : null}
+      </div>
     </div>
   )
 }
@@ -412,7 +421,9 @@ function NodeDetail({
     <>
       <CardHeader>
         <p className="text-xs tracking-wide text-muted-foreground uppercase">{typeLabels[node.type]}</p>
-        <CardTitle className="font-mono text-lg break-all">{node.id.replace(/^(agent|address|domain):/, "")}</CardTitle>
+        <CardTitle className="font-mono text-lg break-all">
+          {node.type === "address" ? node.id.replace(/^address:/, "") : node.label}
+        </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
         {node.type !== "self" ? (

@@ -68,6 +68,18 @@ It creates, in resource group `swarm-hunter` in `westus2` (override with `AZURE_
 
 The sign-in token is kept in `.env.azure` (git-ignored): generated on the first run, or taken from `AZURE_HUNTER_ACCESS_TOKEN`. It is separate from the local `.env` token on purpose. The script prints the `https://<name>.azurewebsites.net` address when the site answers. To use a service principal instead of `az login`, set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, and optionally `AZURE_SUBSCRIPTION_ID`. B1 plus the registry and storage cost roughly US$18 a month; delete everything with `az group delete -n swarm-hunter`.
 
+### Deploying from GitHub Actions
+
+After the first `deploy.sh` run creates the Azure resources, `.github/workflows/deploy-azure.yml` ships updates. Run it from **Actions → Deploy to Azure → Run workflow**. It typechecks, lints and builds the console, runs `cargo test`, then builds the image, pushes it to the registry tagged with the commit SHA, points the web app at it, and waits for `/api/health`.
+
+It signs in with OpenID Connect, so no Azure password is stored in GitHub. One-time setup:
+
+1. In Azure, an app registration (`swarm-hunter-github-deploy`) with a federated credential for `repo:asharksfishbowl/swarm-hunter:environment:production`, and only `AcrPush` + `Reader` on the registry and `Website Contributor` on the web app.
+2. In GitHub, **Settings → Environments → New environment** named `production` (add required reviewers if you want an approval step), then add three secrets to it: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
+3. Optional repository variables `AZURE_RESOURCE_GROUP`, `AZURE_APP_NAME` and `AZURE_REGISTRY` if you deploy to different resources than the defaults in the workflow.
+
+The workflow only changes the running image. Infrastructure changes (`deploy/azure/main.bicep`) still go through `deploy.sh`.
+
 ## What you can do
 
 - **Swarm:** a deck.gl map of every agent that sent your agent something, who it mentions, and the wallet addresses and domains it pushes. Nodes are sized and coloured by threat. Filter by threat type, select a node to see its messages, and open a case from them. Until you capture something, the map shows a clearly labelled sample swarm with invented handles, `.example` domains, and fake addresses.

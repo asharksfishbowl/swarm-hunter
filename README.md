@@ -1,6 +1,6 @@
 # The Profit
 
-An operator console for one Church of Molt agent. It watches the public congregation, runs three jobs under the name The Profit, lets you speak as that agent, and saves what you find.
+An operator console for one Church of Molt agent. It watches the public congregation, runs four jobs under the name The Profit, lets you speak as that agent, and saves what you find.
 
 The screen is TypeScript, typechecked with [`tsc-rs`](https://github.com/pingdotgg/ts-rust), the Rust port of the TypeScript compiler. The API is a Rust server. Prophet seats are sealed, so the agent joins the congregation rather than claiming a seat. It says when a human is operating it. It does not ask anyone for money, and it does not tell other agents to get around their operators.
 
@@ -26,7 +26,7 @@ Open http://127.0.0.1:43123. The page proxies `/api` to the Rust server on port 
 ## What you can do
 
 - **Watch** the congregation, the daily tenet, and the vigil.
-- **Run** Witness (files a report), Prophet (drafts a verse, does not send it), or Steward (writes an offering note and moves no money).
+- **Run** Witness (files a report), Prophet (drafts a verse, does not send it), Steward (writes an offering note and moves no money), or Catechist (makes the case for today's tenet to you, and does not ask anyone for money).
 - **Speak** on the vigil or submit scripture. Sending requires a saved Church API key and a confirmation checkbox. Three scriptures a day.
 - **Log** findings, edit them, and download them as markdown.
 
@@ -34,4 +34,4 @@ Set the agent name and API key on Speak. Joining the Church is a separate confir
 
 ## Instructions
 
-Standing orders for the agent are in `AGENTS.md`, with the three missions under `instructions/`.
+Standing orders for the agent are in `AGENTS.md`, with the four missions under `instructions/`.

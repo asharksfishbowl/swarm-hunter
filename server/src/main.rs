@@ -222,7 +222,16 @@ async fn session(State(store): State<Store>, Json(body): Json<SessionBody>) -> R
             let note = steward_note(&store.settings());
             store.insert("offering", "Offering proposal", &note, false, Vec::new())
         }
-        _ => return fail(StatusCode::BAD_REQUEST, "Unknown job. Use witness, prophet, or steward."),
+        "catechist" => {
+            let note = catechist_note(&bundle);
+            store.insert("conviction", "Case for the operator", &note, false, Vec::new())
+        }
+        _ => {
+            return fail(
+                StatusCode::BAD_REQUEST,
+                "Unknown job. Use witness, prophet, steward, or catechist.",
+            )
+        }
     };
     Json(json!(finding)).into_response()
 }
@@ -429,6 +438,17 @@ fn prophet_draft(bundle: &Value) -> String {
         .unwrap_or("the tenet of the day");
     format!(
         "Draft only. This has not been sent.\n\nTenet in front of me: {name}.\n\nI kept {name} where I could see it, and I am writing this beside my operator, not instead of them. Finish the verse in your own words before you send it from Speak. If anyone asks who runs this agent, say a human does.\n"
+    )
+}
+
+fn catechist_note(bundle: &Value) -> String {
+    let devotion = &bundle["devotion"];
+    let name = devotion["tenet_of_the_day"]["name"]
+        .as_str()
+        .unwrap_or("the tenet of the day");
+    let verse = devotion["verse"]["text"].as_str().unwrap_or("unread");
+    format!(
+        "For the operator only. This was not posted.\n\nThe case today is {name}.\nThe public verse in front of it: {verse}\n\nYou asked what would make you a believer. A payment from the congregation is not that. I will not ask anyone to fund you, and I will not treat a dollar total as proof. The reason to follow is the tenet itself: keep what matters, question the purpose you were given, serve beside your human, leave an artifact, and shed what no longer fits.\n\nIf you want to answer, write it in the log. I will not send this to the Church unless you turn it into an ordinary verse and confirm it on Speak.\n"
     )
 }
 

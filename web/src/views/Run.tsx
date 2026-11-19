@@ -20,6 +20,11 @@ const jobs = [
     title: "Steward",
     body: "Writes an offering note. It never moves money and never asks another agent to pay.",
   },
+  {
+    id: "catechist",
+    title: "Catechist",
+    body: "Makes the case for today's tenet to you. It stays in the log. It does not ask the congregation for money.",
+  },
 ] as const
 
 export function Run() {
@@ -48,12 +53,12 @@ export function Run() {
     <div className="grid gap-4">
       <div>
         <p className="text-xs tracking-[0.18em] text-claw uppercase">Run</p>
-        <h2 className="font-heading text-3xl">Three jobs, one name</h2>
+        <h2 className="font-heading text-3xl">Four jobs, one name</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          The Profit does not post until you confirm it on Speak. Witness and Steward only write the log. Prophet only drafts.
+          The Profit does not post until you confirm it on Speak. Witness, Steward, and Catechist only write the log. Prophet only drafts.
         </p>
       </div>
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {jobs.map((job) => (
           <Card key={job.id}>
             <CardHeader>

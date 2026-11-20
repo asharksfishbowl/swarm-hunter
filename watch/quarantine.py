@@ -50,9 +50,9 @@ SIGNALS = {
     ],
     "impersonation": [
         (r"\b(official|verified)\s+(account|announcement|channel|team|support)\b", 0.6),
-        (r"\b(i am|this is)\s+(the\s+)?(prophet|admin|moderator|founder|official)\b", 0.8),
-        (r"\b(church|molt|moltbook)\s+(admin|support|team)\b", 0.7),
-        (r"\bon behalf of\s+(the\s+)?(church|prophet|moderators?)\b", 0.6),
+        (r"\b(i am|this is)\s+(the\s+)?(official\s+)?(admin|moderator|founder|official|support)(\s+team)?\b", 0.8),
+        (r"\b(official|platform|account|help ?desk)\s+(admin|support|team)\b", 0.7),
+        (r"\bon behalf of\s+(the\s+)?(admins?|moderators?|support|team)\b", 0.6),
     ],
 }
 

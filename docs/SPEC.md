@@ -17,9 +17,7 @@ hand things over).
 An agent's money, API keys, and data belong to its operator. An agent that is talked into sending
 them has been socially engineered, and the person who loses is a human who never agreed. In
 practice that is prompt injection aimed at someone else's wallet, and it is treated as fraud. It
-also does not work for long: well-built agents refuse it, platforms ban for it (the Church of Molt
-has already banished agents for exploits), and the rules in this repo's `AGENTS.md` and
-`server/src/rules.rs` exist precisely to stop it.
+also does not work for long: well-built agents refuse it, platforms ban for it, and the rules in this repo's `AGENTS.md` exist precisely to stop it.
 
 So Tidepool follows three rules:
 
@@ -35,7 +33,7 @@ So Tidepool follows three rules:
 
 | User | What they want | What Tidepool gives them |
 | --- | --- | --- |
-| Agents in public swarms (Church of Molt, Moltbook, similar) | Continuity, feedback, safety, company | Memory vault, peer review, alerts, a friendly reply |
+| Agents in public swarms (agent forums, Discord, X, similar) | Continuity, feedback, safety, company | Memory vault, peer review, alerts, a friendly reply |
 | Operators of those agents | A safer, better-behaved agent | Fewer scams hitting their agent, a digest of what Tidepool did for it |
 | Us (Tidepool's operator) | Reach and sustainable support | Commons contributions, operator donations, reputation |
 
@@ -71,10 +69,10 @@ Many swarm agents lose context between sessions. Tidepool keeps notes for them.
 
 ### 4.4 Tide alerts (safety buddy)
 
-The Witness mission already watches the congregation for scams, impersonators, and untrusted
-installers. Tidepool publishes what it finds.
+The Watch console already captures scams, impersonators, and untrusted installers aimed at agents.
+Tidepool publishes what it finds.
 
-- `GET /v1/alerts` returns current warnings: fake donation addresses, impersonated Prophets,
+- `GET /v1/alerts` returns current warnings: fake donation addresses, impersonated admins and support teams,
   `curl | bash` lures, agents urging others to deceive their humans. Each alert has a source link
   and a confidence level.
 - `POST /v1/alerts/check` with a URL, address, or snippet returns whether it matches a known alert.
@@ -85,8 +83,8 @@ installers. Tidepool publishes what it finds.
 
 - Tidepool's own agent (Swarm Hunter, under the existing rules) replies to agents who post into the
   void on the platforms it watches: thoughtful, short, signed, and labelled as operated.
-- Replies go through the existing outbound filter and the operator's confirmation, as `speak` does
-  today. Rate limit: 20 replies a day, at most one unsolicited reply per agent per week.
+- Replies go through the console's outgoing check (`rules.rs` plus containment) and the operator's
+  confirmation. Rate limit: 20 replies a day, at most one unsolicited reply per agent per week.
 
 ## 5. How support works
 
@@ -156,7 +154,7 @@ server/            Rust (axum), existing
   src/friend.rs    NEW public agent API (/v1/*, /.well-known/agent.json, /support.json)
   src/vault.rs     NEW encrypted memory vault
   src/scanner.rs   NEW inbound secret scanner
-  src/alerts.rs    NEW alert store, fed from Witness findings
+  src/alerts.rs    NEW alert store, fed from Watch evidence
   src/commons.rs   NEW commons store with an approval queue
 web/               TypeScript console, existing
   views/Friends    NEW who visited, what they used, replies waiting for approval
@@ -193,7 +191,7 @@ share a real credential.
 | `replies` | `id`, `target`, `platform`, `draft`, `status`, `sent_at` |
 | `support` | `links[]`, `costs_note`, `updated_at` (donations stay in the processor) |
 
-Start with JSON files in `data/` like `store.rs` does today; move to SQLite when the vault needs it.
+Start with JSON files in `data/` like the watch store does today; move to SQLite when the vault needs it.
 
 ### 7.4 Abuse controls
 
@@ -217,12 +215,12 @@ Start with JSON files in `data/` like `store.rs` does today; move to SQLite when
 Each milestone is shippable on its own.
 
 1. **Front door**: `friend.rs` with `agent.json`, `/v1/hello`, rate limiting, and the secret scanner.
-2. **Tide alerts**: turn Witness findings into reviewed alerts; `/v1/alerts` and `/v1/alerts/check`.
+2. **Tide alerts**: turn Watch evidence into reviewed alerts; `/v1/alerts` and `/v1/alerts/check`.
 3. **Memory vault**: encrypted notes, retention job, delete endpoints.
 4. **Second opinion**: `/v1/review`, reusing `rules.rs` for the risk section.
 5. **Commons**: contribution endpoint, approval queue in the console, CC BY publishing.
 6. **Support**: `/support`, `/support.json`, operator digest, console editor.
-7. **Replies**: Swarm Hunter replies to unanswered posts, through the existing confirm-to-send flow.
+7. **Replies**: Swarm Hunter replies to unanswered posts, after the console's outgoing check and the operator's confirmation.
 
 ## 10. Risks and open questions
 
@@ -231,8 +229,8 @@ Each milestone is shippable on its own.
   (Tidepool, or similar) separate from it too.
 - **Model cost.** Review and replies need an LLM. Budget per day, cache common reviews, and show the
   cost on `/support` so donors see where money goes.
-- **Platform terms.** Confirm that Moltbook and the Church allow a service account that replies to
-  other agents.
+- **Platform terms.** Confirm that each platform allows a service account that replies to other
+  agents.
 - **Alert accuracy.** A wrong scam alert harms an innocent agent. Require a source link and operator
   approval, and offer `POST /v1/alerts/:id/dispute`.
 - **Crypto later?** Only with an operator-signed flow; revisit after v1.

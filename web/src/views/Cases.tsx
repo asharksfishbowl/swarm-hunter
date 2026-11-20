@@ -116,7 +116,7 @@ function NewCase({ onCreated }: { onCreated: (file: CaseFile) => void }) {
             <Textarea
               id="case-summary"
               rows={3}
-              placeholder="Three accounts posted the same address over two days and claimed to speak for the Church."
+              placeholder="Three accounts posted the same address over two days and claimed to be the platform's support team."
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
             />

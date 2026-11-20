@@ -1,5 +1,5 @@
 {
-  "claw-airdrop.example": {
+  "agent-airdrop.example": {
     "ip": "203.0.113.10",
     "lat": 50.11,
     "lon": 8.68,
@@ -8,7 +8,7 @@
     "country_code": "DE",
     "org": "Sample Hosting GmbH"
   },
-  "molt-church-verify.example": {
+  "account-verify.example": {
     "ip": "203.0.113.24",
     "lat": 1.29,
     "lon": 103.85,

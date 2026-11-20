@@ -20,10 +20,7 @@ WORKDIR /app
 COPY --from=server /usr/local/bin/swarm-hunter /usr/local/bin/swarm-hunter
 COPY --from=web /app/web/dist web/dist
 COPY watch/ watch/
-COPY scripture/ scripture/
-COPY reports/ reports/
-COPY AGENTS.md ./
-RUN mkdir -p data && chown -R hunter:hunter data reports
+RUN mkdir -p data && chown -R hunter:hunter data
 USER hunter
 ENV HUNTER_ROOT=/app \
     HOST=0.0.0.0 \

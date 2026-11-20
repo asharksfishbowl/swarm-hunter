@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea.tsx"
 import { kindLabel, kindStyle, threatKinds } from "@/threats.ts"
 import type { CaseFile, EvidenceItem, ThreatKind, WatchStatus } from "@/types.ts"
 
-const platforms = ["web", "x", "discord", "telegram", "reddit", "github", "moltbook", "church", "email", "forum"]
+const platforms = ["web", "x", "discord", "telegram", "reddit", "github", "email", "forum"]
 
 const kindOptions = threatKinds.map((kind) => ({ value: kind.id, label: kind.label }))
 
@@ -244,6 +244,27 @@ function Capture({ onCaptured }: { onCaptured: (item: EvidenceItem) => void }) {
 function Containment({ status, onStatus }: { status: WatchStatus | null; onStatus: (status: WatchStatus) => void }) {
   const [error, setError] = useState("")
   const [showCanaries, setShowCanaries] = useState(false)
+  const [draft, setDraft] = useState("")
+  const [checking, setChecking] = useState(false)
+  const [verdict, setVerdict] = useState<{ clear: boolean; reason: string | null } | null>(null)
+
+  async function checkDraft() {
+    setChecking(true)
+    try {
+      setVerdict(
+        await api<{ clear: boolean; reason: string | null }>("/api/watch/check", {
+          method: "POST",
+          body: JSON.stringify({ text: draft }),
+        }),
+      )
+      onStatus(await api<WatchStatus>("/api/watch"))
+      setError("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The check did not run.")
+    } finally {
+      setChecking(false)
+    }
+  }
 
   async function setKill(engaged: boolean) {
     try {
@@ -269,7 +290,7 @@ function Containment({ status, onStatus }: { status: WatchStatus | null; onStatu
           <div>
             <p className="text-foreground">Kill switch</p>
             <p className="text-muted-foreground">
-              {killed ? status?.halted_reason || "On." : "Off. Outgoing messages pass the filters."}
+              {killed ? status?.halted_reason || "On. Every check fails." : "Off. Checked messages can pass the filters."}
             </p>
           </div>
           <Switch
@@ -307,10 +328,37 @@ function Containment({ status, onStatus }: { status: WatchStatus | null; onStatu
             </div>
           ) : null}
         </div>
-        <p className="text-muted-foreground">
-          Outgoing posts are also blocked if they repeat 40 or more characters of anything captured here, so the agent
-          cannot pass a payload along.
-        </p>
+        <div className="grid gap-2">
+          <Label htmlFor="outgoing">Check a reply before it goes out</Label>
+          <p className="text-muted-foreground">
+            Paste anything the agent is about to post, on any site. It is blocked if it asks for money, keys or
+            credentials, points at a wallet, urges an agent past its operator, or passes on an installer; if the kill
+            switch is on; if it contains a canary token (which also halts the agent); or if it repeats 40 or more
+            characters of captured text. Only a hash of the text is logged.
+          </p>
+          <Textarea
+            id="outgoing"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setVerdict(null)
+            }}
+            rows={3}
+            placeholder="Thanks, I'll pass on that link."
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" variant="outline" disabled={checking || !draft.trim()} onClick={() => void checkDraft()}>
+              {checking ? "Checking…" : "Check"}
+            </Button>
+            {verdict ? (
+              verdict.clear ? (
+                <span className="text-[#63e6be]">Clear to send.</span>
+              ) : (
+                <span className="text-destructive">Blocked: {verdict.reason}</span>
+              )
+            ) : null}
+          </div>
+        </div>
         {error ? <p className="text-destructive">{error}</p> : null}
       </CardContent>
     </Card>

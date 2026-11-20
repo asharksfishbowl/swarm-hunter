@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
 import { LogOut, ShieldAlert, ShieldCheck } from "lucide-react"
 import { api, SIGNED_OUT } from "@/api.ts"
-import { Button, buttonVariants } from "@/components/ui/button.tsx"
-import type { Section, SettingsView, WatchStatus } from "@/types.ts"
+import { Button } from "@/components/ui/button.tsx"
+import type { Section, WatchStatus } from "@/types.ts"
 import { Cases } from "@/views/Cases.tsx"
 import { Evidence } from "@/views/Evidence.tsx"
-import { Log } from "@/views/Log.tsx"
-import { Run } from "@/views/Run.tsx"
 import { SignIn } from "@/views/SignIn.tsx"
-import { Speak } from "@/views/Speak.tsx"
 import { Swarm } from "@/views/Swarm.tsx"
 import { HiveMark } from "@/components/hive-mark"
 import { World } from "@/views/World.tsx"
@@ -18,14 +15,7 @@ const sections: { id: Section; label: string }[] = [
   { id: "world", label: "World" },
   { id: "evidence", label: "Evidence" },
   { id: "cases", label: "Cases" },
-  { id: "speak", label: "Speak" },
-  { id: "run", label: "Run" },
-  { id: "log", label: "Log" },
 ]
-
-function safeLink(url: string): string {
-  return /^https?:\/\//i.test(url) ? url : ""
-}
 
 type AuthState = { required: boolean; signed_in: boolean }
 
@@ -75,7 +65,6 @@ export default function App() {
 
 function Console({ onSignOut }: { onSignOut?: () => void }) {
   const [section, setSection] = useState<Section>("swarm")
-  const [donateUrl, setDonateUrl] = useState("")
   const [status, setStatus] = useState<WatchStatus | null>(null)
   const [statusError, setStatusError] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -90,9 +79,6 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
   }, [])
 
   useEffect(() => {
-    void api<SettingsView>("/api/settings")
-      .then((settings) => setDonateUrl(safeLink(settings.giving_url)))
-      .catch(() => setDonateUrl(""))
     void loadStatus()
     const timer = window.setInterval(() => void loadStatus(), 15_000)
     return () => window.clearInterval(timer)
@@ -145,18 +131,8 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
               {item.label}
             </Button>
           ))}
-          {donateUrl ? (
-            <a
-              href={donateUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ className: "ml-auto bg-[#f2b42c] text-[#1b1203] hover:bg-[#f2b42c]/85" })}
-            >
-              Donate
-            </a>
-          ) : null}
           {onSignOut ? (
-            <Button variant="ghost" className={donateUrl ? "" : "ml-auto"} onClick={onSignOut}>
+            <Button variant="ghost" className="ml-auto" onClick={onSignOut}>
               <LogOut data-icon="inline-start" />
               Sign out
             </Button>
@@ -178,15 +154,6 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
         </div>
         <div className={section === "cases" ? "" : "hidden"}>
           <Cases refreshKey={revision} />
-        </div>
-        <div className={section === "speak" ? "" : "hidden"}>
-          <Speak onSettings={(settings) => setDonateUrl(safeLink(settings.giving_url))} />
-        </div>
-        <div className={section === "run" ? "" : "hidden"}>
-          <Run />
-        </div>
-        <div className={section === "log" ? "" : "hidden"}>
-          <Log />
         </div>
       </main>
     </div>

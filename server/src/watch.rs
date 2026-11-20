@@ -16,8 +16,6 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
-use crate::store::Store;
-
 const KINDS: [&str; 7] = [
     "injection",
     "installer",
@@ -118,7 +116,12 @@ impl Watch {
                 kill_switch: false,
                 halted_reason: String::new(),
                 canaries: (0..3)
-                    .map(|_| format!("molt-canary-{}", &Uuid::new_v4().simple().to_string()[..12]))
+                    .map(|_| {
+                        format!(
+                            "hunter-canary-{}",
+                            &Uuid::new_v4().simple().to_string()[..12]
+                        )
+                    })
                     .collect(),
                 overrides: HashMap::new(),
                 cases: Vec::new(),
@@ -165,7 +168,7 @@ impl Watch {
                 id: format!("sample-{index}"),
                 received_at: at,
                 captured_at: at,
-                platform: message["platform"].as_str().unwrap_or("moltbook").into(),
+                platform: message["platform"].as_str().unwrap_or("web").into(),
                 channel: message["channel"].as_str().unwrap_or_default().into(),
                 url: String::new(),
                 sender: message["sender"].as_str().unwrap_or("unknown").into(),
@@ -283,7 +286,7 @@ impl Watch {
         let mut inner = self.inner.lock().expect("watch");
         if inner.state.kill_switch {
             return Some(
-                "The kill switch is on. Nothing leaves this agent until you turn it off on Watch."
+                "The kill switch is on. Nothing leaves this agent until you turn it off on Evidence."
                     .into(),
             );
         }
@@ -515,6 +518,34 @@ pub async fn status(State(watch): State<Watch>) -> Json<Value> {
 }
 
 #[derive(Deserialize)]
+pub struct CheckBody {
+    text: String,
+}
+
+pub async fn check(State(watch): State<Watch>, Json(body): Json<CheckBody>) -> Response {
+    let text = body.text.trim();
+    if text.is_empty() {
+        return fail(
+            StatusCode::BAD_REQUEST,
+            "Paste the message you want to check.",
+        );
+    }
+    let blocked = crate::rules::blocked(text)
+        .map(str::to_string)
+        .or_else(|| watch.outbound_block(text));
+    watch.custody(
+        if blocked.is_some() {
+            "blocked"
+        } else {
+            "cleared"
+        },
+        "outgoing check",
+        &format!("sha256:{}", hex::encode(Sha256::digest(text.as_bytes()))),
+    );
+    Json(json!({ "clear": blocked.is_none(), "reason": blocked })).into_response()
+}
+
+#[derive(Deserialize)]
 pub struct KillBody {
     engaged: bool,
 }
@@ -707,8 +738,8 @@ struct Node {
     sent: u32,
 }
 
-pub async fn swarm(State(watch): State<Watch>, State(store): State<Store>) -> Json<Value> {
-    let me = store.settings().agent_name;
+pub async fn swarm(State(watch): State<Watch>) -> Json<Value> {
+    let me = crate::setting("AGENT_NAME").unwrap_or_else(|| "Our agent".into());
     let inner = watch.inner.lock().expect("watch");
     let sample = inner.records.is_empty();
     let records = if sample {

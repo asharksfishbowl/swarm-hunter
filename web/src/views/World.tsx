@@ -82,7 +82,8 @@ function placeLabels<T>(
 }
 
 function hostLabel(host: PlacedHost) {
-  return host.place?.city ? `${host.host} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : host.host
+  const name = host.host.length > 26 ? `${host.host.slice(0, 10)}…${host.host.slice(-14)}` : host.host
+  return host.place?.city ? `${name} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : name
 }
 
 function spread(hosts: WorldHost[]): Map<string, [number, number]> {

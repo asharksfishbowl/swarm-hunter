@@ -179,7 +179,7 @@ impl Geo {
 
     pub fn who_is(&self, ip: IpAddr) -> (String, String, String) {
         if !is_public(&ip) {
-            return ("Private network".into(), String::new(), String::new());
+            return ("Private or reserved address".into(), String::new(), String::new());
         }
         let found = self.locate_ip(ip);
         (found.3, found.4, found.6)

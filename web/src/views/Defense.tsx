@@ -188,7 +188,7 @@ function EventRow({ event }: { event: DefenseEvent }) {
       </div>
       <p className="text-muted-foreground">{event.detail}</p>
       {event.source === "network" ? (
-        <p className="font-mono text-xs break-all text-muted-foreground">
+        <p className="font-mono text-xs break-words text-muted-foreground">
           {event.ip || "unknown address"}
           {event.country_code ? ` (${event.country_code})` : ""}
           {where ? ` · ${where}` : ""}

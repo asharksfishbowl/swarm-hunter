@@ -724,9 +724,13 @@ function HostDetail({ host, feeds, onAgent }: { host: WorldHost; feeds: Feed[]; 
             {host.listings.map((listing) => (
               <div key={`${listing.source}-${listing.url}`} className="grid gap-0.5 rounded-md border p-2 text-xs">
                 <div className="flex justify-between gap-2">
-                  <a href={listing.reference} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
-                    {feeds.find((f) => f.id === listing.source)?.name ?? listing.source}
-                  </a>
+                  {listing.reference.startsWith("https://") ? (
+                    <a href={listing.reference} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                      {feeds.find((f) => f.id === listing.source)?.name ?? listing.source}
+                    </a>
+                  ) : (
+                    <span>{feeds.find((f) => f.id === listing.source)?.name ?? listing.source}</span>
+                  )}
                   <span className="text-muted-foreground">{listing.listed}</span>
                 </div>
                 <span className="font-mono break-all text-muted-foreground select-all">{listing.url}</span>

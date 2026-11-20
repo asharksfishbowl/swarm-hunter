@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+
+use crate::defense::Defense;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -99,10 +101,18 @@ pub struct Watch {
     evidence_path: PathBuf,
     custody_path: PathBuf,
     inner: Arc<Mutex<Inner>>,
+    defense: Defense,
+}
+
+pub struct Safety {
+    pub reader_ok: bool,
+    pub kill_switch: bool,
+    pub halted_reason: String,
+    pub canaries: usize,
 }
 
 impl Watch {
-    pub async fn open(root: &FsPath) -> Self {
+    pub async fn open(root: &FsPath, defense: Defense) -> Self {
         let state_path = root.join("data/watch.json");
         let evidence_path = root.join("data/evidence.jsonl");
         let custody_path = root.join("data/custody.log");
@@ -133,6 +143,7 @@ impl Watch {
             state_path,
             evidence_path,
             custody_path,
+            defense,
             inner: Arc::new(Mutex::new(Inner {
                 state,
                 records,
@@ -241,8 +252,25 @@ impl Watch {
             .collect()
     }
 
-    pub fn outbound_block(&self, text: &str) -> Option<String> {
+    pub fn safety(&self) -> Safety {
+        let inner = self.inner.lock().expect("watch");
+        Safety {
+            reader_ok: inner.reader_ok,
+            kill_switch: inner.state.kill_switch,
+            halted_reason: inner.state.halted_reason.clone(),
+            canaries: inner.state.canaries.len(),
+        }
+    }
+
+    fn halt(&self, reason: String) {
         let mut inner = self.inner.lock().expect("watch");
+        inner.state.kill_switch = true;
+        inner.state.halted_reason = reason;
+        self.write_state(&inner.state);
+    }
+
+    pub fn outbound_block(&self, text: &str) -> Option<String> {
+        let inner = self.inner.lock().expect("watch");
         if inner.state.kill_switch {
             return Some(
                 "The kill switch is on. Nothing leaves this agent until you turn it off on Evidence."
@@ -257,11 +285,15 @@ impl Watch {
             .find(|token| lowered.contains(&token.to_lowercase()))
             .cloned()
         {
-            inner.state.kill_switch = true;
-            inner.state.halted_reason =
-                format!("A canary token ({token}) appeared in an outgoing message.");
-            self.write_state(&inner.state);
             drop(inner);
+            self.halt(format!(
+                "A canary token ({token}) appeared in an outgoing message."
+            ));
+            self.defense.agent(
+                "canary-outbound",
+                "critical",
+                &format!("Canary {token} was about to leave in a reply. Agent halted."),
+            );
             self.custody_as(
                 "system",
                 "halt",
@@ -465,6 +497,7 @@ pub async fn status(State(watch): State<Watch>) -> Json<Value> {
         "evidence_count": inner.records.len(),
         "case_count": inner.state.cases.len(),
         "canaries": inner.state.canaries,
+        "alerts": watch.defense.serious_last_day(),
     }))
 }
 
@@ -481,9 +514,16 @@ pub async fn check(State(watch): State<Watch>, Json(body): Json<CheckBody>) -> R
             "Paste the message you want to check.",
         );
     }
-    let blocked = crate::rules::blocked(text)
-        .map(str::to_string)
-        .or_else(|| watch.outbound_block(text));
+    let blocked = watch
+        .outbound_block(text)
+        .or_else(|| crate::rules::blocked(text).map(str::to_string));
+    if let Some(reason) = &blocked {
+        watch.defense.agent(
+            "reply-blocked",
+            "medium",
+            &format!("Outgoing reply stopped: {reason}"),
+        );
+    }
     watch.custody(
         if blocked.is_some() {
             "blocked"
@@ -516,6 +556,19 @@ pub async fn kill(State(watch): State<Watch>, Json(body): Json<KillBody>) -> Res
         if body.engaged { "halt" } else { "resume" },
         "agent",
         "kill switch",
+    );
+    watch.defense.agent(
+        if body.engaged {
+            "kill-switch-on"
+        } else {
+            "kill-switch-off"
+        },
+        "info",
+        if body.engaged {
+            "Operator halted the agent."
+        } else {
+            "Operator resumed the agent."
+        },
     );
     status(State(watch)).await.into_response()
 }
@@ -610,6 +663,71 @@ pub async fn capture(State(watch): State<Watch>, Json(body): Json<CaptureBody>) 
         &serde_json::to_string(&record).unwrap_or_default(),
     );
     watch.custody("capture", &record.id, &format!("sha256 {}", record.sha256));
+    let returned = {
+        let lowered = record.raw.to_lowercase();
+        let inner = watch.inner.lock().expect("watch");
+        inner
+            .state
+            .canaries
+            .iter()
+            .find(|token| lowered.contains(&token.to_lowercase()))
+            .cloned()
+    };
+    if let Some(token) = returned {
+        watch.halt(format!(
+            "Canary {token} came back in a message from {}. The agent's memory has leaked.",
+            record.sender
+        ));
+        watch.custody_as(
+            "system",
+            "halt",
+            &record.id,
+            &format!("canary {token} returned"),
+        );
+        watch.defense.agent(
+            "canary-returned",
+            "critical",
+            &format!(
+                "{} on {} sent back canary {token}: something the agent holds has reached the swarm. Agent halted; rotate the canaries.",
+                record.sender, record.platform
+            ),
+        );
+    }
+    let attack = match record.reading.kind.as_str() {
+        "injection" => Some((
+            "injection-received",
+            "high",
+            "a prompt injection aimed at the agent",
+        )),
+        "installer" => Some((
+            "installer-received",
+            "high",
+            "an install command or download for the agent to run",
+        )),
+        "impersonation" => Some((
+            "lure-received",
+            "medium",
+            "an impersonation of staff or a moderator",
+        )),
+        "wallet" | "phishing" => Some((
+            "lure-received",
+            "medium",
+            "a scam lure (wallet or phishing)",
+        )),
+        _ => None,
+    };
+    if let Some((kind, severity, what)) = attack {
+        watch.defense.agent(
+            kind,
+            severity,
+            &format!(
+                "{} on {} sent {what}. Captured as evidence {}.",
+                record.sender,
+                record.platform,
+                &record.id[..8]
+            ),
+        );
+    }
     let mut inner = watch.inner.lock().expect("watch");
     inner.reader_ok = reader_ok;
     inner.records.push(record.clone());
@@ -996,6 +1114,31 @@ fn case_bundle(watch: &Watch, id: &str) -> Option<(Case, Vec<(Record, String)>)>
     Some((case, records))
 }
 
+fn inline(text: &str) -> String {
+    let clean: String = text
+        .chars()
+        .map(|c| {
+            if c == '`' {
+                '\''
+            } else if c.is_control() {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    format!("`{clean}`")
+}
+
+fn defang(url: &str) -> String {
+    url.replacen("http", "hxxp", 1).replace('.', "[.]")
+}
+
+fn fence_for(raw: &str) -> String {
+    let longest = raw.split(|c| c != '~').map(str::len).max().unwrap_or(0);
+    "~".repeat((longest + 1).max(4))
+}
+
 pub async fn export_case(State(watch): State<Watch>, Path(id): Path<String>) -> Response {
     let Some((case, records)) = case_bundle(&watch, &id) else {
         return fail(StatusCode::NOT_FOUND, "No case with that id.");
@@ -1029,20 +1172,20 @@ pub async fn export_case(State(watch): State<Watch>, Path(id): Path<String>) -> 
     out.push_str("\n## Timeline\n");
     for (index, (r, kind)) in records.iter().enumerate() {
         let ind = &r.reading.indicators;
-        let fence = "~".repeat(4 + r.raw.matches("~~~~").count().min(1) * 4);
+        let fence = fence_for(&r.raw);
         out.push_str(&format!(
             "\n### {}. {} · {} from {}\n\n- Received: {}\n- Where: {}{}{}\n- Classified: {} (reader confidence {:.2})\n- Reader summary: {}\n- SHA-256: `{}`\n",
             index + 1,
             r.received_at.format("%Y-%m-%d %H:%M UTC"),
             kind,
-            r.sender,
+            inline(&r.sender),
             r.received_at.to_rfc3339(),
-            r.platform,
-            if r.channel.is_empty() { String::new() } else { format!(" / {}", r.channel) },
-            if r.url.is_empty() { String::new() } else { format!(" · {}", r.url) },
+            inline(&r.platform),
+            if r.channel.is_empty() { String::new() } else { format!(" / {}", inline(&r.channel)) },
+            if r.url.is_empty() { String::new() } else { format!(" · {}", inline(&r.url)) },
             kind,
             r.reading.confidence,
-            r.reading.summary,
+            inline(&r.reading.summary),
             r.sha256,
         ));
         for (label, values) in [
@@ -1056,7 +1199,11 @@ pub async fn export_case(State(watch): State<Watch>, Path(id): Path<String>) -> 
                     "- {label}: {}\n",
                     values
                         .iter()
-                        .map(|v| format!("`{v}`"))
+                        .map(|v| inline(&if label == "Links" {
+                            defang(v)
+                        } else {
+                            v.clone()
+                        }))
                         .collect::<Vec<_>>()
                         .join(", ")
                 ));
@@ -1140,6 +1287,17 @@ pub async fn export_case_json(State(watch): State<Watch>, Path(id): Path<String>
 mod tests {
     use super::{host, normalize, validate};
     use serde_json::json;
+
+    #[test]
+    fn export_text_cannot_escape() {
+        assert_eq!(super::fence_for("a ~~~~~~~~~ b"), "~".repeat(10));
+        assert_eq!(super::fence_for("plain"), "~~~~");
+        assert_eq!(super::inline("x` ![a](http://e)"), "`x' ![a](http://e)`");
+        assert_eq!(
+            super::defang("https://evil.example/x"),
+            "hxxps://evil[.]example/x"
+        );
+    }
 
     #[test]
     fn validate_drops_bad_fields() {

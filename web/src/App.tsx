@@ -4,6 +4,7 @@ import { api, SIGNED_OUT } from "@/api.ts"
 import { Button } from "@/components/ui/button.tsx"
 import type { Section, WatchStatus } from "@/types.ts"
 import { Cases } from "@/views/Cases.tsx"
+import { Defense } from "@/views/Defense.tsx"
 import { Evidence } from "@/views/Evidence.tsx"
 import { SignIn } from "@/views/SignIn.tsx"
 import { Swarm } from "@/views/Swarm.tsx"
@@ -15,6 +16,7 @@ const sections: { id: Section; label: string }[] = [
   { id: "world", label: "World" },
   { id: "evidence", label: "Evidence" },
   { id: "cases", label: "Cases" },
+  { id: "defense", label: "Defense" },
 ]
 
 type AuthState = { required: boolean; signed_in: boolean }
@@ -129,6 +131,9 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
               onClick={() => setSection(item.id)}
             >
               {item.label}
+              {item.id === "defense" && status?.alerts ? (
+                <span className="rounded-full bg-destructive px-1.5 font-mono text-[10px] text-white">{status.alerts}</span>
+              ) : null}
             </Button>
           ))}
           {onSignOut ? (
@@ -154,6 +159,9 @@ function Console({ onSignOut }: { onSignOut?: () => void }) {
         </div>
         <div className={section === "cases" ? "" : "hidden"}>
           <Cases refreshKey={revision} />
+        </div>
+        <div className={section === "defense" ? "" : "hidden"}>
+          {section === "defense" ? <Defense /> : null}
         </div>
       </main>
     </div>

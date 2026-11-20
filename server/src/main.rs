@@ -1,4 +1,5 @@
 mod auth;
+mod defense;
 mod geo;
 mod intel;
 mod rules;
@@ -13,11 +14,18 @@ use tower_http::services::{ServeDir, ServeFile};
 use watch::Watch;
 
 #[derive(Clone)]
-struct AppState {
+pub(crate) struct AppState {
     watch: Watch,
     auth: auth::Auth,
     geo: geo::Geo,
     intel: intel::Intel,
+    defense: defense::Defense,
+}
+
+impl FromRef<AppState> for defense::Defense {
+    fn from_ref(state: &AppState) -> Self {
+        state.defense.clone()
+    }
 }
 
 impl FromRef<AppState> for intel::Intel {
@@ -54,7 +62,9 @@ async fn main() {
     let root = setting("ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
-    let watch = Watch::open(&root).await;
+    let geo = geo::Geo::open(&root);
+    let defense = defense::Defense::open(&root, geo.clone());
+    let watch = Watch::open(&root, defense.clone()).await;
     let auth = auth::Auth::from_env();
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".into());
     let loopback = matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1");
@@ -67,12 +77,12 @@ async fn main() {
         .and_then(|value| value.parse().ok())
         .unwrap_or(43124);
 
-    let geo = geo::Geo::open(&root);
     let state = AppState {
         watch,
         auth: auth.clone(),
         geo,
         intel: intel::Intel::open(&root),
+        defense: defense.clone(),
     };
     let api = Router::new()
         .route("/api/health", get(health))
@@ -85,6 +95,7 @@ async fn main() {
         .route("/api/swarm", get(watch::swarm))
         .route("/api/world", get(geo::world))
         .route("/api/world/locate", post(geo::locate))
+        .route("/api/defense", get(defense::status))
         .route("/api/intel", get(intel::status))
         .route("/api/intel/refresh", post(intel::refresh))
         .route("/api/evidence", get(watch::list).post(watch::capture))
@@ -94,7 +105,7 @@ async fn main() {
         .route("/api/cases/:id", axum::routing::patch(watch::update_case))
         .route("/api/cases/:id/export.md", get(watch::export_case))
         .route("/api/cases/:id/export.json", get(watch::export_case_json))
-        .with_state(state);
+        .with_state(state.clone());
 
     let dist = root.join("web/dist");
     let app = if dist.join("index.html").exists() {
@@ -103,10 +114,12 @@ async fn main() {
     } else {
         api
     };
-    let app = app.layer(axum::middleware::from_fn_with_state(
-        auth.clone(),
-        auth::guard,
-    ));
+    let app = app
+        .layer(axum::middleware::from_fn_with_state(state, auth::guard))
+        .layer(axum::middleware::from_fn_with_state(
+            defense,
+            defense::shield,
+        ));
 
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
@@ -119,7 +132,12 @@ async fn main() {
             "open, loopback only"
         }
     );
-    axum::serve(listener, app).await.expect("serve");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
+    .expect("serve");
 }
 
 async fn health() -> Json<Value> {

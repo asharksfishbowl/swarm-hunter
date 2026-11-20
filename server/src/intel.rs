@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::watch::host;
 
 const PER_FEED: usize = 250;
+const MAX_BYTES: usize = 4 * 1024 * 1024;
 const REFRESH_HOURS: u64 = 6;
 
 struct Feed {
@@ -125,6 +126,13 @@ impl Intel {
             .user_agent(concat!("swarm-hunter/", env!("CARGO_PKG_VERSION")))
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(90))
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.url().scheme() == "https" && attempt.previous().len() < 5 {
+                    attempt.follow()
+                } else {
+                    attempt.stop()
+                }
+            }))
             .build()
         {
             Ok(client) => client,
@@ -217,12 +225,29 @@ fn keep_unique(items: impl IntoIterator<Item = Indicator>) -> Vec<Indicator> {
         .collect()
 }
 
+async fn limited(mut response: reqwest::Response) -> Result<String, String> {
+    if response
+        .content_length()
+        .is_some_and(|n| n as usize > MAX_BYTES)
+    {
+        return Err("The feed was larger than expected, so it was skipped.".into());
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        body.extend_from_slice(&chunk);
+        if body.len() > MAX_BYTES {
+            return Err("The feed was larger than expected, so it was skipped.".into());
+        }
+    }
+    Ok(String::from_utf8_lossy(&body).into_owned())
+}
+
 async fn text(client: &reqwest::Client, url: &str) -> Result<String, String> {
     let response = client.get(url).send().await.map_err(|e| e.to_string())?;
     if !response.status().is_success() {
         return Err(format!("{url} answered {}", response.status()));
     }
-    response.text().await.map_err(|e| e.to_string())
+    limited(response).await
 }
 
 async fn openphish(client: &reqwest::Client) -> Result<Vec<Indicator>, String> {
@@ -314,7 +339,8 @@ async fn urlhaus(client: &reqwest::Client) -> Result<Vec<Indicator>, String> {
     if !response.status().is_success() {
         return Err(format!("URLhaus answered {}", response.status()));
     }
-    let reply: UrlhausReply = response.json().await.map_err(|e| e.to_string())?;
+    let reply: UrlhausReply =
+        serde_json::from_str(&limited(response).await?).map_err(|e| e.to_string())?;
     if reply.query_status != "ok" {
         return Err(format!("URLhaus said {}", reply.query_status));
     }

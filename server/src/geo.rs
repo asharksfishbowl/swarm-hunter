@@ -117,7 +117,7 @@ impl Geo {
         inner.note = note.into();
     }
 
-    fn ready(&self) -> bool {
+    pub fn ready(&self) -> bool {
         self.city.read().expect("geo").is_some()
     }
 
@@ -175,6 +175,14 @@ impl Geo {
         }
         self.load_readers();
         println!("geo database ready");
+    }
+
+    pub fn who_is(&self, ip: IpAddr) -> (String, String, String) {
+        if !is_public(&ip) {
+            return ("Private network".into(), String::new(), String::new());
+        }
+        let found = self.locate_ip(ip);
+        (found.3, found.4, found.6)
     }
 
     fn locate_ip(

@@ -1,4 +1,4 @@
-use axum::extract::{Request, State};
+use axum::extract::{ConnectInfo, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -6,7 +6,10 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use std::net::SocketAddr;
 use std::sync::Arc;
+
+use crate::defense::{self, Defense};
 use std::time::Duration;
 
 const COOKIE: &str = "hunter_session";
@@ -15,6 +18,7 @@ const COOKIE: &str = "hunter_session";
 pub struct Auth {
     session: Option<Arc<String>>,
     secure: bool,
+    length: usize,
 }
 
 impl Auth {
@@ -29,6 +33,7 @@ impl Auth {
             }
         }
         Self {
+            length: token.as_ref().map(|t| t.chars().count()).unwrap_or(0),
             session: token.map(|t| Arc::new(session_for(&t))),
             secure: crate::setting("SECURE_COOKIE")
                 .map(|v| v == "1")
@@ -38,6 +43,19 @@ impl Auth {
 
     pub fn required(&self) -> bool {
         self.session.is_some()
+    }
+
+    pub fn token_length(&self) -> Option<usize> {
+        self.session.as_ref().map(|_| self.length)
+    }
+
+    fn bearer_ok(&self, headers: &HeaderMap) -> Option<bool> {
+        let expected = self.session.as_ref()?;
+        let bearer = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())?
+            .strip_prefix("Bearer ")?;
+        Some(same(&session_for(bearer.trim()), expected))
     }
 
     fn allows(&self, headers: &HeaderMap) -> bool {
@@ -82,19 +100,44 @@ fn same(a: &str, b: &str) -> bool {
             == 0
 }
 
-pub async fn guard(State(auth): State<Auth>, request: Request, next: Next) -> Response {
+fn too_many(until: chrono::DateTime<chrono::Utc>) -> Response {
+    (
+        StatusCode::TOO_MANY_REQUESTS,
+        Json(json!({ "error": format!("Too many wrong tokens from this address. Try again after {} UTC.", until.format("%H:%M")) })),
+    )
+        .into_response()
+}
+
+pub async fn guard(State(state): State<crate::AppState>, request: Request, next: Next) -> Response {
+    let auth = &state.auth;
     let path = request.uri().path();
     let open =
         !path.starts_with("/api/") || matches!(path, "/api/health" | "/api/auth" | "/api/login");
-    if open || auth.allows(request.headers()) {
-        next.run(request).await
-    } else {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "Sign in with the access token." })),
-        )
-            .into_response()
+    if open {
+        return next.run(request).await;
     }
+    let origin = defense::origin_of(&request);
+    let bearer = auth.bearer_ok(request.headers());
+    if bearer.is_some() {
+        if let Some(until) = state.defense.locked_until(&origin.ip) {
+            return too_many(until);
+        }
+    }
+    if auth.allows(request.headers()) {
+        return next.run(request).await;
+    }
+    if bearer == Some(false) {
+        state
+            .defense
+            .failed_credential(&origin, "Wrong bearer token on the API");
+    } else {
+        state.defense.denied(&origin);
+    }
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(json!({ "error": "Sign in with the access token." })),
+    )
+        .into_response()
 }
 
 pub async fn status(State(auth): State<Auth>, headers: HeaderMap) -> Json<serde_json::Value> {
@@ -106,12 +149,24 @@ pub struct LoginBody {
     token: String,
 }
 
-pub async fn login(State(auth): State<Auth>, Json(body): Json<LoginBody>) -> Response {
+pub async fn login(
+    State(auth): State<Auth>,
+    State(defense): State<Defense>,
+    peer: Option<ConnectInfo<SocketAddr>>,
+    headers: HeaderMap,
+    Json(body): Json<LoginBody>,
+) -> Response {
     let Some(expected) = &auth.session else {
         return Json(json!({ "required": false, "signed_in": true })).into_response();
     };
+    let origin =
+        defense::Origin::from_parts(&headers, peer.map(|c| c.0.ip()), "POST", "/api/login");
+    if let Some(until) = defense.locked_until(&origin.ip) {
+        return too_many(until);
+    }
     let session = session_for(body.token.trim());
     if !same(&session, expected) {
+        defense.failed_credential(&origin, "Wrong token on the sign-in page");
         tokio::time::sleep(Duration::from_millis(800)).await;
         return (
             StatusCode::UNAUTHORIZED,
@@ -119,6 +174,7 @@ pub async fn login(State(auth): State<Auth>, Json(body): Json<LoginBody>) -> Res
         )
             .into_response();
     }
+    defense.signed_in(&origin);
     (
         [(header::SET_COOKIE, auth.cookie(&session, 60 * 60 * 24 * 30))],
         Json(json!({ "required": true, "signed_in": true })),
@@ -144,6 +200,7 @@ mod tests {
         Auth {
             session: Some(Arc::new(session_for("correct horse battery staple"))),
             secure: false,
+            length: 28,
         }
     }
 

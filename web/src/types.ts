@@ -1,4 +1,4 @@
-export type Section = "swarm" | "world" | "evidence" | "cases"
+export type Section = "swarm" | "world" | "evidence" | "cases" | "defense"
 
 export type ThreatKind =
   | "injection"
@@ -43,6 +43,7 @@ export type WatchStatus = {
   evidence_count: number
   case_count: number
   canaries: string[]
+  alerts: number
 }
 
 export type SwarmNode = {
@@ -165,4 +166,33 @@ export type World = {
   countries: { code: string; name: string; hosts: number; threat: number; agents: number }[]
   pending: number
   intel: Intel
+}
+
+export type Severity = "info" | "low" | "medium" | "high" | "critical"
+
+export type DefenseEvent = {
+  id: string
+  at: string
+  last_at: string
+  kind: string
+  severity: Severity
+  source: "network" | "agent"
+  ip: string
+  country: string
+  country_code: string
+  org: string
+  method: string
+  path: string
+  user_agent: string
+  detail: string
+  count: number
+}
+
+export type SafetyCheck = { name: string; state: "ok" | "warn" | "fail"; detail: string }
+
+export type DefenseReport = {
+  events: DefenseEvent[]
+  last_day: { by_kind: Record<string, number>; hostile_ips: number; serious: number }
+  locked: { ip: string; until: string }[]
+  checks: SafetyCheck[]
 }

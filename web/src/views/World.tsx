@@ -54,19 +54,35 @@ function facing(view: View, [lon, lat]: [number, number]): boolean {
   return cos > 0.2
 }
 
-function declutter<T>(items: T[], zoom: number, at: (item: T) => [number, number], rank: (item: T) => number): T[] {
-  const gap = 34 / Math.pow(2, zoom)
-  const kept: [number, number][] = []
+const MAX_LABELS = 36
+
+function declutter<T>(
+  items: T[],
+  zoom: number,
+  at: (item: T) => [number, number],
+  rank: (item: T) => number,
+  width: (item: T) => number,
+): T[] {
+  const perDegree = (512 * Math.pow(2, zoom)) / 360
+  const kept: { lon: number; lat: number; width: number }[] = []
   return [...items]
     .sort((a, b) => rank(b) - rank(a))
     .filter((item) => {
+      if (kept.length >= MAX_LABELS) return false
       const [lon, lat] = at(item)
+      const w = width(item)
       const clash = kept.some(
-        ([klon, klat]) => Math.abs(klat - lat) < gap * 0.45 && Math.abs(klon - lon) * Math.cos((lat * Math.PI) / 180) < gap,
+        (k) =>
+          Math.abs(k.lat - lat) * perDegree < 18 &&
+          Math.abs(k.lon - lon) * Math.cos((lat * Math.PI) / 180) * perDegree < (k.width + w) / 2 + 10,
       )
-      if (!clash) kept.push([lon, lat])
+      if (!clash) kept.push({ lon, lat, width: w })
       return !clash
     })
+}
+
+function hostLabel(host: PlacedHost) {
+  return host.place?.city ? `${host.host} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : host.host
 }
 
 function spread(hosts: WorldHost[]): Map<string, [number, number]> {
@@ -86,7 +102,7 @@ function spread(hosts: WorldHost[]): Map<string, [number, number]> {
         return
       }
       const angle = index * 2.39996
-      const radius = 0.9 * Math.sqrt(index)
+      const radius = 0.5 * Math.sqrt(index)
       out.set(host.host, [lon + radius * Math.cos(angle), Math.max(-85, Math.min(85, lat + 0.8 * radius * Math.sin(angle)))])
     })
   }
@@ -243,22 +259,35 @@ export function World({ refreshKey }: { refreshKey: number }) {
   const lit = (key: string) => !related || related.has(key)
   const alpha = (key: string, on: number, off: number) => (lit(key) ? on : off)
   const globe = mode === "globe"
-  const visible = <T,>(items: T[], at: (item: T) => [number, number]) =>
-    globe ? items.filter((item) => facing(view, at(item))) : items
   const overlay = { depthCompare: "always" as const, depthWriteEnabled: false }
 
-  const hostLabels = declutter(
-    visible(hosts, (host) => host.position),
-    view.zoom,
-    (host) => host.position,
-    (host) => host.threat + (lit(`host:${host.host}`) && related ? 10 : 0),
+  const coarseLon = Math.round(view.longitude / 3) * 3
+  const coarseLat = Math.round(view.latitude / 3) * 3
+  const coarseZoom = Math.round(view.zoom * 4) / 4
+  const coarse = useMemo(
+    () => ({ longitude: coarseLon, latitude: coarseLat, zoom: coarseZoom }),
+    [coarseLon, coarseLat, coarseZoom],
   )
-  const agentLabels = visible(
-    agents.filter((agent) => related?.has(`agent:${agent.name}`)),
-    (agent) => agent.at,
+  const facingHosts = useMemo(
+    () => (globe ? hosts.filter((host) => facing(coarse, host.position)) : hosts),
+    [hosts, globe, coarse],
   )
-  const hostLabel = (host: PlacedHost) =>
-    host.place?.city ? `${host.host} · ${host.place.city.replace(/\s*\(.*\)$/, "")}` : host.host
+  const facingAgents = useMemo(
+    () => (globe ? agents.filter((agent) => facing(coarse, agent.at)) : agents),
+    [agents, globe, coarse],
+  )
+  const hostLabels = useMemo(
+    () =>
+      declutter(
+        facingHosts,
+        coarse.zoom,
+        (host) => host.position,
+        (host) => host.threat + (host.evidence.length ? 5 : 0) + (related?.has(`host:${host.host}`) ? 10 : 0),
+        (host) => hostLabel(host).length * 6.6,
+      ),
+    [facingHosts, coarse, related],
+  )
+  const agentLabels = facingAgents.filter((agent) => related?.has(`agent:${agent.name}`))
 
   const layers = [
     globe
@@ -294,7 +323,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new ScatterplotLayer<PlacedHost>({
       id: "hosts",
-      data: visible(hosts, (host) => host.position),
+      data: facingHosts,
       parameters: overlay,
       pickable: true,
       stroked: true,
@@ -320,7 +349,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new ScatterplotLayer<PlacedAgent>({
       id: "agents",
-      data: visible(agents, (agent) => agent.at),
+      data: facingAgents,
       parameters: overlay,
       pickable: true,
       stroked: true,
@@ -536,6 +565,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
                 </p>
               </CardHeader>
               <CardContent className="grid gap-4 text-sm">
+                {notice ? <p className="text-xs text-[#63e6be]">{notice}</p> : null}
                 {world ? (
                   <div className="grid gap-2 rounded-lg border p-3">
                     <Button size="sm" onClick={() => void locate()} disabled={!canLocate || locating}>
@@ -546,7 +576,6 @@ export function World({ refreshKey }: { refreshKey: number }) {
                       Looks up each domain's DNS and matches the address to a local location database. Nothing is
                       fetched from the domains themselves, though their DNS servers can see the lookup.
                     </p>
-                    {notice ? <p className="text-xs text-[#63e6be]">{notice}</p> : null}
                     {world.database.note ? <p className="text-xs text-muted-foreground">{world.database.note}</p> : null}
                   </div>
                 ) : null}

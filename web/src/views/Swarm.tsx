@@ -348,7 +348,7 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
             <div className="absolute inset-0 grid place-items-center text-muted-foreground">Mapping the swarm…</div>
           ) : null}
           {graph && graph.nodes.length <= 1 ? (
-            <div className="absolute inset-0 grid place-items-center text-muted-foreground">
+            <div className="pointer-events-none absolute inset-x-0 top-6 text-center text-sm text-muted-foreground">
               Nothing has reached the agent yet.
             </div>
           ) : null}

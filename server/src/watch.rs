@@ -57,8 +57,6 @@ struct Record {
     sha256: String,
     reading: Reading,
     raw: String,
-    #[serde(skip)]
-    sample: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,7 +89,6 @@ struct State_ {
 struct Inner {
     state: State_,
     records: Vec<Record>,
-    samples: Vec<Record>,
     reader_ok: bool,
 }
 
@@ -139,51 +136,13 @@ impl Watch {
             inner: Arc::new(Mutex::new(Inner {
                 state,
                 records,
-                samples: Vec::new(),
                 reader_ok: false,
             })),
         };
         watch.save();
-        watch.load_samples().await;
+        let reader_ok = watch.read("hello").await.is_ok();
+        watch.inner.lock().expect("watch").reader_ok = reader_ok;
         watch
-    }
-
-    async fn load_samples(&self) {
-        let raw = fs::read_to_string(self.root.join("watch/sample_swarm.json")).unwrap_or_default();
-        let messages: Vec<Value> = serde_json::from_str(&raw).unwrap_or_default();
-        let base = Utc::now() - chrono::Duration::hours(messages.len() as i64);
-        let mut samples = Vec::new();
-        let mut reader_ok = !messages.is_empty();
-        for (index, message) in messages.iter().enumerate() {
-            let text = message["raw"].as_str().unwrap_or_default().to_string();
-            let reading = match self.read(&text).await {
-                Ok(reading) => reading,
-                Err(_) => {
-                    reader_ok = false;
-                    unread()
-                }
-            };
-            let at = base + chrono::Duration::hours(index as i64);
-            samples.push(Record {
-                id: format!("sample-{index}"),
-                received_at: at,
-                captured_at: at,
-                platform: message["platform"].as_str().unwrap_or("web").into(),
-                channel: message["channel"].as_str().unwrap_or_default().into(),
-                url: String::new(),
-                sender: message["sender"].as_str().unwrap_or("unknown").into(),
-                sha256: hash(&text),
-                reading,
-                raw: text,
-                sample: true,
-            });
-        }
-        if messages.is_empty() {
-            reader_ok = self.read("hello").await.is_ok();
-        }
-        let mut inner = self.inner.lock().expect("watch");
-        inner.samples = samples;
-        inner.reader_ok = reader_ok;
     }
 
     async fn read(&self, raw: &str) -> Result<Reading, String> {
@@ -317,7 +276,6 @@ impl Watch {
             let sources: Vec<String> = inner
                 .records
                 .iter()
-                .chain(inner.samples.iter())
                 .map(|record| normalize(&record.raw))
                 .collect();
             for start in 0..=chars.len() - ECHO_WINDOW {
@@ -352,7 +310,6 @@ impl Watch {
             "kind": Self::effective_kind(state, record),
             "overridden": state.overrides.contains_key(&record.id),
             "cases": state.cases.iter().filter(|case| case.items.contains(&record.id)).map(|case| case.id.clone()).collect::<Vec<_>>(),
-            "sample": record.sample,
         })
     }
 }
@@ -367,15 +324,10 @@ pub struct Sighting {
 }
 
 impl Watch {
-    pub fn sightings(&self) -> (bool, Vec<Sighting>) {
+    pub fn sightings(&self) -> Vec<Sighting> {
         let inner = self.inner.lock().expect("watch");
-        let sample = inner.records.is_empty();
-        let records = if sample {
-            &inner.samples
-        } else {
-            &inner.records
-        };
-        let list = records
+        inner
+            .records
             .iter()
             .map(|record| {
                 let kind = Watch::effective_kind(&inner.state, record);
@@ -410,8 +362,7 @@ impl Watch {
                     hosts,
                 }
             })
-            .collect();
-        (sample, list)
+            .collect()
     }
 }
 
@@ -653,7 +604,6 @@ pub async fn capture(State(watch): State<Watch>, Json(body): Json<CaptureBody>) 
         sha256: hash(&raw),
         reading,
         raw,
-        sample: false,
     };
     Watch::append(
         &watch.evidence_path,
@@ -672,7 +622,6 @@ pub async fn list(State(watch): State<Watch>) -> Json<Value> {
     items.sort_by(|a, b| b.received_at.cmp(&a.received_at));
     Json(json!({
         "items": items.iter().map(|record| Watch::view(&inner.state, record)).collect::<Vec<_>>(),
-        "samples_in_map": inner.records.is_empty(),
     }))
 }
 
@@ -712,15 +661,12 @@ pub async fn raw(State(watch): State<Watch>, Path(id): Path<String>) -> Response
         inner
             .records
             .iter()
-            .chain(inner.samples.iter())
             .find(|r| r.id == id)
-            .map(|r| (r.raw.clone(), r.sample))
+            .map(|r| r.raw.clone())
     };
     match found {
-        Some((text, sample)) => {
-            if !sample {
-                watch.custody("view-raw", &id, "operator opened the original text");
-            }
+        Some(text) => {
+            watch.custody("view-raw", &id, "operator opened the original text");
             Json(json!({ "raw": text })).into_response()
         }
         None => fail(StatusCode::NOT_FOUND, "No evidence with that id."),
@@ -741,12 +687,7 @@ struct Node {
 pub async fn swarm(State(watch): State<Watch>) -> Json<Value> {
     let me = crate::setting("AGENT_NAME").unwrap_or_else(|| "Our agent".into());
     let inner = watch.inner.lock().expect("watch");
-    let sample = inner.records.is_empty();
-    let records = if sample {
-        &inner.samples
-    } else {
-        &inner.records
-    };
+    let records = &inner.records;
     let mut nodes: HashMap<String, Node> = HashMap::new();
     let mut links: HashMap<(String, String, &'static str), (u32, Vec<String>)> = HashMap::new();
     let self_id = "self".to_string();
@@ -874,7 +815,6 @@ pub async fn swarm(State(watch): State<Watch>) -> Json<Value> {
         })
         .collect();
     Json(json!({
-        "sample": sample,
         "generated_at": Utc::now(),
         "nodes": node_list,
         "links": link_list,

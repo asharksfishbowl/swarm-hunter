@@ -5,16 +5,17 @@ import { ArcLayer, GeoJsonLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer 
 import { feature } from "topojson-client"
 import type { Topology, GeometryCollection } from "topojson-specification"
 import type { FeatureCollection } from "geojson"
-import { Globe2, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, RotateCcw } from "lucide-react"
+import { DownloadCloud, Globe2, LocateFixed, Map as MapIcon, Pause, Play, RefreshCw, RotateCcw } from "lucide-react"
 import countriesTopo from "world-atlas/countries-110m.json"
 import { api, when } from "@/api.ts"
 import { Badge } from "@/components/ui/badge.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx"
 import { kindColor, kindLabel, kindStyle } from "@/threats.ts"
-import type { ThreatKind, World as WorldData, WorldAgent, WorldArc, WorldHost } from "@/types.ts"
+import type { Feed, Intel, ThreatKind, World as WorldData, WorldAgent, WorldArc, WorldHost } from "@/types.ts"
 
 type Mode = "globe" | "flat"
+type Source = "all" | "captured" | "feeds"
 type Selection = { type: "host"; id: string } | { type: "agent"; id: string } | null
 type View = { longitude: number; latitude: number; zoom: number }
 type PlacedHost = WorldHost & { position: [number, number] }
@@ -31,7 +32,6 @@ for (let lon = -180; lon < 180; lon += 10) {
 const labelFont = "ui-monospace, SFMono-Regular, Menlo, monospace"
 
 const dbCopy: Record<WorldData["database"]["status"], string> = {
-  sample: "Sample locations",
   ready: "Location database ready",
   downloading: "Downloading location database",
   missing: "Location database missing",
@@ -85,8 +85,9 @@ function spread(hosts: WorldHost[]): Map<string, [number, number]> {
         out.set(host.host, [lon, lat])
         return
       }
-      const angle = (index / (group.length - 1 || 1)) * Math.PI * 2
-      out.set(host.host, [lon + 1.4 * Math.cos(angle), lat + 1.1 * Math.sin(angle)])
+      const angle = index * 2.39996
+      const radius = 0.9 * Math.sqrt(index)
+      out.set(host.host, [lon + radius * Math.cos(angle), Math.max(-85, Math.min(85, lat + 0.8 * radius * Math.sin(angle)))])
     })
   }
   return out
@@ -96,6 +97,8 @@ export function World({ refreshKey }: { refreshKey: number }) {
   const [world, setWorld] = useState<WorldData | null>(null)
   const [loading, setLoading] = useState(true)
   const [locating, setLocating] = useState(false)
+  const [pulling, setPulling] = useState(false)
+  const [source, setSource] = useState<Source>("all")
   const [notice, setNotice] = useState("")
   const [error, setError] = useState("")
   const [mode, setMode] = useState<Mode>("globe")
@@ -163,7 +166,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
       setNotice(
         next.hosts.length
           ? `Placed ${placed} of ${next.hosts.length} domains.`
-          : "No links in captured messages yet, so there is nothing to locate.",
+          : "Nothing to locate yet. Pull the threat feeds or capture a message with a link.",
       )
       setError("")
     } catch (err) {
@@ -173,26 +176,56 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }
   }
 
+  async function pullFeeds() {
+    setPulling(true)
+    setNotice("")
+    try {
+      const intel = await api<Intel>("/api/intel/refresh", { method: "POST" })
+      const next = await api<WorldData>("/api/world")
+      setWorld(next)
+      const failed = intel.feeds.filter((feed) => feed.error && !feed.error.includes("is not set"))
+      setNotice(
+        `${intel.total} listed domains from ${intel.feeds.filter((f) => f.count).length} feeds.` +
+          (next.pending ? ` Press Locate to place ${next.pending} new.` : "") +
+          (failed.length ? ` ${failed.map((f) => f.name).join(", ")} failed.` : ""),
+      )
+      setError("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The feeds did not download.")
+    } finally {
+      setPulling(false)
+    }
+  }
+
   function switchMode(next: Mode) {
     setMode(next)
     if (next === "flat") setSpin(false)
   }
 
-  const positions = useMemo(() => spread(world?.hosts ?? []), [world])
+  const shownHosts = useMemo(
+    () =>
+      (world?.hosts ?? []).filter((host) =>
+        source === "all" ? true : source === "captured" ? host.evidence.length > 0 : host.feeds.length > 0,
+      ),
+    [world, source],
+  )
+  const positions = useMemo(() => spread(shownHosts), [shownHosts])
   const hosts = useMemo<PlacedHost[]>(
     () =>
-      (world?.hosts ?? []).flatMap((host) => {
+      shownHosts.flatMap((host) => {
         const position = positions.get(host.host)
         return position ? [{ ...host, position }] : []
       }),
-    [world, positions],
+    [shownHosts, positions],
   )
   const agents = useMemo<PlacedAgent[]>(
     () =>
-      (world?.agents ?? []).flatMap((agent) =>
-        agent.position ? [{ ...agent, at: [agent.position.lon, agent.position.lat] as [number, number] }] : [],
-      ),
-    [world],
+      source === "feeds"
+        ? []
+        : (world?.agents ?? []).flatMap((agent) =>
+            agent.position ? [{ ...agent, at: [agent.position.lon, agent.position.lat] as [number, number] }] : [],
+          ),
+    [world, source],
   )
 
   const focus = hovered ?? selected
@@ -248,7 +281,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
     }),
     new ArcLayer<WorldArc>({
       id: "arcs",
-      data: world?.arcs ?? [],
+      data: source === "feeds" ? [] : (world?.arcs ?? []),
       getSourcePosition: (arc) => [arc.from.lon, arc.from.lat],
       getTargetPosition: (arc) => positions.get(arc.host) ?? [arc.to.lon, arc.to.lat],
       getSourceColor: (arc) => [...kindColor(arc.kind), alpha(`host:${arc.host}`, 210, 45)] as [number, number, number, number],
@@ -347,9 +380,14 @@ export function World({ refreshKey }: { refreshKey: number }) {
     selected?.type === "agent"
       ? [...(world?.agents ?? []), ...(world?.unplaced ?? [])].find((a) => a.name === selected.id)
       : undefined
-  const canLocate = world && !world.sample && world.database.status === "ready"
+  const canLocate = world?.database.status === "ready"
   const located = hosts.length
-  const totalHosts = world?.hosts.length ?? 0
+  const totalHosts = shownHosts.length
+  const counts = {
+    all: world?.hosts.length ?? 0,
+    captured: world?.hosts.filter((h) => h.evidence.length).length ?? 0,
+    feeds: world?.hosts.filter((h) => h.feeds.length).length ?? 0,
+  }
 
   return (
     <div className="grid gap-4">
@@ -358,12 +396,20 @@ export function World({ refreshKey }: { refreshKey: number }) {
           <p className="font-mono text-xs tracking-[0.18em] text-honey uppercase">World</p>
           <h2 className="font-heading text-3xl">Where the swarm lives</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Swarms post on any site, but their links point at servers somewhere on Earth. Rings are the domains they push,
-            placed by DNS and IP location. Dots are the agents pushing them, pinned beside their main server, because an
-            agent's own location is unknown.
+            Swarms post on any site, but their links point at servers somewhere on Earth. Rings are real domains: the ones
+            your agent was sent, and the live phishing, wallet-drainer and malware sites listed by public threat feeds,
+            placed by DNS and IP location. Dots are the agents that sent them to you, pinned beside their main server.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <div className="flex rounded-lg border p-0.5" role="group" aria-label="Which domains to show">
+            {(["all", "captured", "feeds"] as const).map((key) => (
+              <Button key={key} size="sm" variant={source === key ? "default" : "ghost"} onClick={() => setSource(key)}>
+                {key === "all" ? "All" : key === "captured" ? "Captured" : "Feeds"}
+                <span className="font-mono text-[10px] opacity-70">{counts[key]}</span>
+              </Button>
+            ))}
+          </div>
           <div className="flex rounded-lg border p-0.5" role="group" aria-label="Map projection">
             <Button size="sm" variant={globe ? "default" : "ghost"} onClick={() => switchMode("globe")}>
               <Globe2 data-icon="inline-start" />
@@ -394,12 +440,6 @@ export function World({ refreshKey }: { refreshKey: number }) {
         </div>
       </div>
 
-      {world?.sample ? (
-        <div className="rounded-lg border border-[#f2b42c]/40 bg-[#f2b42c]/10 px-4 py-3 text-sm">
-          This is a <strong>sample world</strong>: invented domains placed in invented locations, using reserved
-          documentation IPs. Capture real messages on Evidence, then press <em>Locate infrastructure</em>.
-        </div>
-      ) : null}
       {error ? <p className="text-destructive">{error}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
@@ -461,19 +501,30 @@ export function World({ refreshKey }: { refreshKey: number }) {
           {loading && !world ? (
             <div className="absolute inset-0 grid place-items-center text-muted-foreground">Drawing the world…</div>
           ) : null}
-          {world && !world.sample && totalHosts === 0 ? (
-            <div className="pointer-events-none absolute inset-x-0 top-6 text-center text-sm text-muted-foreground">
-              None of the captured messages contain links yet, so there is nothing to place.
+          {world && !loading && totalHosts === 0 ? (
+            <div className="pointer-events-none absolute inset-x-0 top-6 px-6 text-center text-sm text-muted-foreground">
+              {source === "captured"
+                ? "None of the captured messages contain links yet."
+                : "No feed data yet. Press Pull threat feeds to download today's lists."}
+            </div>
+          ) : world && !loading && totalHosts > 0 && located === 0 ? (
+            <div className="pointer-events-none absolute inset-x-0 top-6 px-6 text-center text-sm text-muted-foreground">
+              {totalHosts} domains are waiting to be placed. Press Locate.
             </div>
           ) : null}
           <div className="pointer-events-none absolute bottom-2 left-3 text-[10px] text-muted-foreground/80">
             {world?.database.attribution} · Borders: Natural Earth
+            {world?.intel.feeds.some((f) => f.count) ? ` · Feeds: ${world.intel.feeds.filter((f) => f.count).map((f) => f.name).join(", ")}` : ""}
           </div>
         </div>
 
         <Card className="max-h-[68vh] min-h-[420px] overflow-auto">
           {selectedHost ? (
-            <HostDetail host={selectedHost} onAgent={(name) => setSelected({ type: "agent", id: name })} />
+            <HostDetail
+              host={selectedHost}
+              feeds={world?.intel.feeds ?? []}
+              onAgent={(name) => setSelected({ type: "agent", id: name })}
+            />
           ) : selectedAgent ? (
             <AgentDetail agent={selectedAgent} onHost={(host) => setSelected({ type: "host", id: host })} />
           ) : (
@@ -485,7 +536,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
                 </p>
               </CardHeader>
               <CardContent className="grid gap-4 text-sm">
-                {world && !world.sample ? (
+                {world ? (
                   <div className="grid gap-2 rounded-lg border p-3">
                     <Button size="sm" onClick={() => void locate()} disabled={!canLocate || locating}>
                       <LocateFixed data-icon="inline-start" />
@@ -499,6 +550,7 @@ export function World({ refreshKey }: { refreshKey: number }) {
                     {world.database.note ? <p className="text-xs text-muted-foreground">{world.database.note}</p> : null}
                   </div>
                 ) : null}
+                {world ? <Feeds feeds={world.intel.feeds} pulling={pulling} onPull={() => void pullFeeds()} /> : null}
                 {world?.countries.length ? (
                   <ul className="grid gap-2">
                     {world.countries.map((country) => (
@@ -577,7 +629,47 @@ function Threat({ value, kind }: { value: number; kind: string }) {
   )
 }
 
-function HostDetail({ host, onAgent }: { host: WorldHost; onAgent: (name: string) => void }) {
+function Feeds({ feeds, pulling, onPull }: { feeds: Feed[]; pulling: boolean; onPull: () => void }) {
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <Button size="sm" variant="outline" onClick={onPull} disabled={pulling}>
+        <DownloadCloud data-icon="inline-start" />
+        {pulling ? "Downloading lists…" : "Pull threat feeds"}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Downloads public blocklists of live scam sites. Only the lists are fetched; the listed sites are never opened.
+        Refreshes on its own every six hours.
+      </p>
+      <ul className="grid gap-2">
+        {feeds.map((feed) => (
+          <li key={feed.id} className="grid gap-0.5 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <a href={feed.home} target="_blank" rel="noreferrer" className="text-foreground underline-offset-2 hover:underline">
+                {feed.name}
+              </a>
+              <Badge variant="outline" style={kindStyle(feed.kind)}>
+                {feed.count} {kindLabel(feed.kind).toLowerCase()}
+              </Badge>
+            </div>
+            <span className="text-muted-foreground">{feed.about}</span>
+            {feed.error ? (
+              <span className={feed.error.includes("is not set") ? "text-muted-foreground" : "text-destructive"}>
+                {feed.error}
+              </span>
+            ) : feed.fetched_at ? (
+              <span className="text-muted-foreground">Updated {when(feed.fetched_at)}</span>
+            ) : (
+              <span className="text-muted-foreground">Not downloaded yet</span>
+            )}
+            <span className="text-muted-foreground/70">{feed.license}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function HostDetail({ host, feeds, onAgent }: { host: WorldHost; feeds: Feed[]; onAgent: (name: string) => void }) {
   const place = host.place
   const rows: [string, string][] = place
     ? [
@@ -608,6 +700,12 @@ function HostDetail({ host, onAgent }: { host: WorldHost; onAgent: (name: string
         ) : (
           <p className="text-muted-foreground">Not looked up yet.</p>
         )}
+        {place && /cloudflare|amazon|google|microsoft|fastly|akamai|vercel|netlify|github/i.test(place.org) ? (
+          <p className="text-muted-foreground">
+            This sits behind a shared host or CDN, so the pin marks {place.org.replace(/,? Inc\.?$/, "")}'s network, not
+            the operator. Report it to {place.org.replace(/,? Inc\.?$/, "")}, which can take it down.
+          </p>
+        ) : null}
         {place && place.status !== "located" ? (
           <p className="text-muted-foreground">
             {place.status === "unresolved"
@@ -617,19 +715,41 @@ function HostDetail({ host, onAgent }: { host: WorldHost; onAgent: (name: string
                 : "The address is not in the location database."}
           </p>
         ) : null}
-        <div className="grid gap-1.5">
-          <p className="text-xs text-muted-foreground">Pushed by</p>
-          <div className="flex flex-wrap gap-1.5">
-            {host.senders.map((name) => (
-              <Button key={name} size="xs" variant="outline" onClick={() => onAgent(name)}>
-                {name}
-              </Button>
+        {host.listings.length ? (
+          <div className="grid gap-2">
+            <p className="text-xs text-muted-foreground">Listed by</p>
+            {host.listings.map((listing) => (
+              <div key={`${listing.source}-${listing.url}`} className="grid gap-0.5 rounded-md border p-2 text-xs">
+                <div className="flex justify-between gap-2">
+                  <a href={listing.reference} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                    {feeds.find((f) => f.id === listing.source)?.name ?? listing.source}
+                  </a>
+                  <span className="text-muted-foreground">{listing.listed}</span>
+                </div>
+                <span className="font-mono break-all text-muted-foreground select-all">{listing.url}</span>
+                {listing.tags.length ? <span className="text-muted-foreground">{listing.tags.join(", ")}</span> : null}
+              </div>
             ))}
+            <p className="text-xs text-muted-foreground">The listed address is shown as text only. Do not open it.</p>
           </div>
-        </div>
-        <p className="text-muted-foreground">
-          Seen on {host.platforms.join(", ")} in {host.evidence.length} message{host.evidence.length === 1 ? "" : "s"}.
-        </p>
+        ) : null}
+        {host.senders.length ? (
+          <div className="grid gap-1.5">
+            <p className="text-xs text-muted-foreground">Pushed by</p>
+            <div className="flex flex-wrap gap-1.5">
+              {host.senders.map((name) => (
+                <Button key={name} size="xs" variant="outline" onClick={() => onAgent(name)}>
+                  {name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {host.evidence.length ? (
+          <p className="text-muted-foreground">
+            Seen on {host.platforms.join(", ")} in {host.evidence.length} message{host.evidence.length === 1 ? "" : "s"}.
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           Hosting providers take abuse reports. Add the network above to the case when you report.
         </p>

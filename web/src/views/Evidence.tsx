@@ -116,8 +116,8 @@ export function Evidence({
           <CardContent className="grid gap-2">
             <p className="text-foreground">No evidence yet.</p>
             <p className="text-sm text-muted-foreground">
-              When the agent receives something suspicious, paste it above with the sender's handle. The swarm map shows a
-              sample until the first capture.
+              When the agent receives something suspicious, paste it above with the sender's handle. Swarm and World build
+              from what you capture here.
             </p>
           </CardContent>
         </Card>

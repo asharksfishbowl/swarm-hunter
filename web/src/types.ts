@@ -34,7 +34,6 @@ export type EvidenceItem = {
   kind: ThreatKind
   overridden: boolean
   cases: string[]
-  sample: boolean
 }
 
 export type WatchStatus = {
@@ -67,7 +66,6 @@ export type SwarmLink = {
 }
 
 export type SwarmGraph = {
-  sample: boolean
   generated_at: string
   nodes: SwarmNode[]
   links: SwarmLink[]
@@ -109,8 +107,32 @@ export type WorldHost = {
   evidence: string[]
   senders: string[]
   platforms: string[]
+  feeds: string[]
+  listings: FeedListing[]
   place: Place | null
 }
+
+export type FeedListing = {
+  source: string
+  url: string
+  listed: string
+  reference: string
+  tags: string[]
+}
+
+export type Feed = {
+  id: string
+  name: string
+  kind: ThreatKind
+  about: string
+  home: string
+  license: string
+  fetched_at: string | null
+  count: number
+  error: string
+}
+
+export type Intel = { feeds: Feed[]; total: number }
 
 export type WorldAgent = {
   name: string
@@ -134,13 +156,13 @@ export type WorldArc = {
 }
 
 export type World = {
-  sample: boolean
   generated_at: string
-  database: { status: "sample" | "ready" | "downloading" | "missing" | "failed" | "off"; note: string; attribution: string }
+  database: { status: "ready" | "downloading" | "missing" | "failed" | "off"; note: string; attribution: string }
   hosts: WorldHost[]
   agents: WorldAgent[]
   unplaced: WorldAgent[]
   arcs: WorldArc[]
   countries: { code: string; name: string; hosts: number; threat: number; agents: number }[]
   pending: number
+  intel: Intel
 }

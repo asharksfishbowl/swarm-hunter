@@ -282,10 +282,11 @@ export function Swarm({ onCaseOpened }: { onCaseOpened: () => void }) {
         </div>
       </div>
 
-      {graph?.sample ? (
-        <div className="rounded-lg border border-[#f2b42c]/40 bg-[#f2b42c]/10 px-4 py-3 text-sm">
-          This is a <strong>sample swarm</strong> with invented handles, domains, and addresses. Capture a real message
-          on Evidence and the map switches to what your agent has actually received.
+      {graph && graph.items.length === 0 ? (
+        <div className="rounded-lg border px-4 py-3 text-sm text-muted-foreground">
+          <strong className="text-foreground">Nothing captured yet.</strong> This map is built only from messages your
+          agent has actually received. Paste one on Evidence to start it. Known scam infrastructure from public threat
+          feeds is on World.
         </div>
       ) : null}
 
@@ -388,7 +389,7 @@ function NodeDetail({
 }) {
   const [raw, setRaw] = useState<Record<string, string>>({})
   const [message, setMessage] = useState("")
-  const real = items.filter((item) => !item.sample)
+  const real = items
 
   async function reveal(id: string) {
     try {
@@ -482,7 +483,7 @@ function NodeDetail({
                 ) : (
                   <Button size="xs" variant="ghost" className="justify-self-start" onClick={() => void reveal(item.id)}>
                     <Eye data-icon="inline-start" />
-                    Show original{item.sample ? "" : " (logged)"}
+                    Show original (logged)
                   </Button>
                 )}
               </article>

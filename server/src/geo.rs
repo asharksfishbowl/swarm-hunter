@@ -13,10 +13,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
+use crate::intel::Intel;
 use crate::watch::Watch;
 
 const ATTRIBUTION: &str = "IP geolocation by DB-IP (https://db-ip.com), CC BY 4.0";
-const MAX_LOOKUPS: usize = 200;
+const MAX_LOOKUPS: usize = 800;
+const PARALLEL_LOOKUPS: usize = 48;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Place {
@@ -32,17 +34,6 @@ pub struct Place {
     org: String,
     status: String,
     resolved_at: DateTime<Utc>,
-}
-
-#[derive(Deserialize)]
-struct SamplePlace {
-    ip: String,
-    lat: f64,
-    lon: f64,
-    city: String,
-    country: String,
-    country_code: String,
-    org: String,
 }
 
 #[derive(Deserialize, Default)]
@@ -88,7 +79,6 @@ pub struct Geo {
     inner: Arc<Mutex<Inner>>,
     city: Arc<RwLock<Option<Reader<Vec<u8>>>>>,
     asn: Arc<RwLock<Option<Reader<Vec<u8>>>>>,
-    samples: Arc<HashMap<String, Place>>,
 }
 
 impl Geo {
@@ -99,28 +89,6 @@ impl Geo {
             .ok()
             .and_then(|raw| serde_json::from_str(&raw).ok())
             .unwrap_or_default();
-        let raw = fs::read_to_string(root.join("watch/sample_geo.json")).unwrap_or_default();
-        let fixture: HashMap<String, SamplePlace> = serde_json::from_str(&raw).unwrap_or_default();
-        let samples = fixture
-            .into_iter()
-            .map(|(host, p)| {
-                let place = Place {
-                    host: host.clone(),
-                    ips: vec![p.ip.clone()],
-                    ip: p.ip,
-                    lat: Some(p.lat),
-                    lon: Some(p.lon),
-                    city: p.city,
-                    country: p.country,
-                    country_code: p.country_code,
-                    asn: None,
-                    org: p.org,
-                    status: "located".into(),
-                    resolved_at: Utc::now(),
-                };
-                (host, place)
-            })
-            .collect();
         let geo = Self {
             cache_path,
             inner: Arc::new(Mutex::new(Inner {
@@ -130,7 +98,6 @@ impl Geo {
             })),
             city: Arc::new(RwLock::new(None)),
             asn: Arc::new(RwLock::new(None)),
-            samples: Arc::new(samples),
             dir,
         };
         geo.load_readers();
@@ -424,6 +391,8 @@ struct HostAgg {
     evidence: BTreeSet<String>,
     senders: BTreeSet<String>,
     platforms: BTreeSet<String>,
+    feeds: BTreeSet<String>,
+    listings: Vec<Value>,
 }
 
 #[derive(Default)]
@@ -435,8 +404,26 @@ struct AgentAgg {
     hosts: BTreeMap<String, (f64, String)>,
 }
 
-fn build(watch: &Watch, geo: &Geo) -> Value {
-    let (sample, sightings) = watch.sightings();
+fn feed_score(kind: &str) -> f64 {
+    match kind {
+        "installer" => 0.9,
+        "phishing" | "wallet" => 0.8,
+        _ => 0.5,
+    }
+}
+
+fn wanted_hosts(watch: &Watch, intel: &Intel) -> BTreeSet<String> {
+    watch
+        .sightings()
+        .iter()
+        .flat_map(|s| s.hosts.iter().cloned())
+        .chain(intel.indicators().into_iter().map(|i| i.host))
+        .filter(|h| valid_host(h))
+        .collect()
+}
+
+fn build(watch: &Watch, geo: &Geo, intel: &Intel) -> Value {
+    let sightings = watch.sightings();
     let mut hosts: BTreeMap<String, HostAgg> = BTreeMap::new();
     let mut agents: BTreeMap<String, AgentAgg> = BTreeMap::new();
     for s in &sightings {
@@ -461,15 +448,24 @@ fn build(watch: &Watch, geo: &Geo) -> Value {
             h.platforms.insert(s.platform.clone());
         }
     }
+    for listing in intel.indicators() {
+        let h = hosts.entry(listing.host.clone()).or_default();
+        h.threat = h.threat.max(feed_score(&listing.kind));
+        *h.kinds.entry(listing.kind.clone()).or_default() += 1;
+        h.feeds.insert(listing.source.clone());
+        if h.listings.len() < 5 {
+            h.listings.push(json!({
+                "source": listing.source,
+                "url": listing.url,
+                "listed": listing.listed,
+                "reference": listing.reference,
+                "tags": listing.tags,
+            }));
+        }
+    }
 
     let inner = geo.inner.lock().expect("geo");
-    let place_of = |host: &str| -> Option<Place> {
-        if sample {
-            geo.samples.get(host).cloned()
-        } else {
-            inner.cache.get(host).cloned()
-        }
-    };
+    let place_of = |host: &str| -> Option<Place> { inner.cache.get(host).cloned() };
 
     let mut host_list = Vec::new();
     let mut located: HashMap<String, (f64, f64)> = HashMap::new();
@@ -504,6 +500,8 @@ fn build(watch: &Watch, geo: &Geo) -> Value {
             "evidence": agg.evidence,
             "senders": agg.senders,
             "platforms": agg.platforms,
+            "feeds": agg.feeds,
+            "listings": agg.listings,
             "place": place,
         }));
     }
@@ -568,20 +566,24 @@ fn build(watch: &Watch, geo: &Geo) -> Value {
     });
 
     json!({
-        "sample": sample,
         "generated_at": Utc::now(),
-        "database": { "status": if sample { "sample".to_string() } else { inner.status.clone() }, "note": inner.note, "attribution": ATTRIBUTION },
+        "database": { "status": inner.status, "note": inner.note, "attribution": ATTRIBUTION },
         "hosts": host_list,
         "agents": agent_list,
         "unplaced": unplaced,
         "arcs": arcs,
         "countries": country_list,
-        "pending": if sample { 0 } else { pending },
+        "pending": pending,
+        "intel": intel.view(),
     })
 }
 
-pub async fn world(State(watch): State<Watch>, State(geo): State<Geo>) -> Json<Value> {
-    Json(build(&watch, &geo))
+pub async fn world(
+    State(watch): State<Watch>,
+    State(geo): State<Geo>,
+    State(intel): State<Intel>,
+) -> Json<Value> {
+    Json(build(&watch, &geo, &intel))
 }
 
 #[derive(Deserialize, Default)]
@@ -592,21 +594,16 @@ pub struct LocateBody {
 pub async fn locate(
     State(watch): State<Watch>,
     State(geo): State<Geo>,
+    State(intel): State<Intel>,
     body: Option<Json<LocateBody>>,
 ) -> Json<Value> {
     let retry = body
         .map(|Json(b)| b.retry.unwrap_or(false))
         .unwrap_or(false);
-    let (sample, sightings) = watch.sightings();
-    if !sample && geo.ready() {
-        let wanted: BTreeSet<String> = sightings
-            .iter()
-            .flat_map(|s| s.hosts.iter().cloned())
-            .filter(|h| valid_host(h))
-            .collect();
+    if geo.ready() {
         let todo: Vec<String> = {
             let inner = geo.inner.lock().expect("geo");
-            wanted
+            wanted_hosts(&watch, &intel)
                 .into_iter()
                 .filter(|h| match inner.cache.get(h) {
                     None => true,
@@ -616,8 +613,16 @@ pub async fn locate(
                 .collect()
         };
         let mut found = Vec::new();
-        for host in todo {
-            found.push(geo.resolve(&host).await);
+        for chunk in todo.chunks(PARALLEL_LOOKUPS) {
+            let mut set = tokio::task::JoinSet::new();
+            for host in chunk {
+                let geo = geo.clone();
+                let host = host.clone();
+                set.spawn(async move { geo.resolve(&host).await });
+            }
+            while let Some(Ok(place)) = set.join_next().await {
+                found.push(place);
+            }
         }
         let mut inner = geo.inner.lock().expect("geo");
         for place in found {
@@ -625,7 +630,7 @@ pub async fn locate(
         }
         geo.save(&inner.cache);
     }
-    Json(build(&watch, &geo))
+    Json(build(&watch, &geo, &intel))
 }
 
 #[cfg(test)]

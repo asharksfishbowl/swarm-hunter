@@ -1,5 +1,6 @@
 mod auth;
 mod geo;
+mod intel;
 mod rules;
 mod watch;
 
@@ -16,6 +17,13 @@ struct AppState {
     watch: Watch,
     auth: auth::Auth,
     geo: geo::Geo,
+    intel: intel::Intel,
+}
+
+impl FromRef<AppState> for intel::Intel {
+    fn from_ref(state: &AppState) -> Self {
+        state.intel.clone()
+    }
 }
 
 impl FromRef<AppState> for geo::Geo {
@@ -64,6 +72,7 @@ async fn main() {
         watch,
         auth: auth.clone(),
         geo,
+        intel: intel::Intel::open(&root),
     };
     let api = Router::new()
         .route("/api/health", get(health))
@@ -76,6 +85,8 @@ async fn main() {
         .route("/api/swarm", get(watch::swarm))
         .route("/api/world", get(geo::world))
         .route("/api/world/locate", post(geo::locate))
+        .route("/api/intel", get(intel::status))
+        .route("/api/intel/refresh", post(intel::refresh))
         .route("/api/evidence", get(watch::list).post(watch::capture))
         .route("/api/evidence/:id", axum::routing::patch(watch::classify))
         .route("/api/evidence/:id/raw", get(watch::raw))

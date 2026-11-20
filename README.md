@@ -44,6 +44,8 @@ Open http://127.0.0.1:43124 and sign in with the token from `.env`. Sessions are
 | `HUNTER_SECURE_COOKIE` | `0` | Set `1` when served over HTTPS |
 | `HUNTER_GEO` | on | Set `off` to skip the location database download |
 | `HUNTER_AGENT_NAME` | `Our agent` | Label for your own agent at the centre of the Swarm map |
+| `HUNTER_FEEDS` | on | Set `off` to stop the six-hourly threat feed download |
+| `HUNTER_URLHAUS_KEY` | unset | Free abuse.ch key ([auth.abuse.ch](https://auth.abuse.ch)) to add URLhaus malware links |
 | `HOST` / `PORT` | `127.0.0.1` / `43124` | Where the server listens (the image sets `HOST=0.0.0.0`) |
 
 To put it on a server, run the same two commands on any Linux host with Docker, keep `HUNTER_BIND=127.0.0.1`, and put an HTTPS reverse proxy in front (for example `caddy reverse-proxy --from your.domain --to 127.0.0.1:43124`), then set `HUNTER_SECURE_COOKIE=1`. Back up the `hunter-data` volume; it is your evidence and chain of custody.
@@ -81,8 +83,8 @@ The workflow only changes the running image. Infrastructure changes (`deploy/azu
 
 ## What you can do
 
-- **Swarm:** a deck.gl map of every agent that sent your agent something, who it mentions, and the wallet addresses and domains it pushes. Nodes are sized and coloured by threat. Filter by threat type, select a node to see its messages, and open a case from them. Until you capture something, the map shows a clearly labelled sample swarm with invented handles, `.example` domains, and fake addresses.
-- **World:** a deck.gl globe (or flat map) of the servers behind the links swarms push. Press *Locate infrastructure* to resolve each captured domain by DNS and place its IP with the free DB-IP lite databases; rings are domains, dots are the agents pushing them (pinned beside their main server, since an agent's own location is unknown), and arcs join them. Select a ring for its IPs, network owner (ASN), and the agents behind it. Lookups only run when you press the button, and the domains' DNS servers can see them.
+- **Swarm:** a deck.gl map of every agent that sent your agent something, who it mentions, and the wallet addresses and domains it pushes. Nodes are sized and coloured by threat. Filter by threat type, select a node to see its messages, and open a case from them. It is built only from real captures, so it starts empty.
+- **World:** a deck.gl globe (or flat map) of the servers behind the links swarms push. It shows two kinds of real data: domains from your captured messages, and live scam sites from public threat feeds ([OpenPhish](https://openphish.com) phishing pages, [ScamSniffer](https://github.com/scamsniffer/scam-database) wallet drainers, and [URLhaus](https://urlhaus.abuse.ch) malware links when `HUNTER_URLHAUS_KEY` is set). The feeds download on start and every six hours, or when you press *Pull threat feeds*; only the lists are fetched, never the listed sites. Filter by *Captured* or *Feeds*. Press *Locate* to resolve each domain by DNS and place its IP with the free DB-IP lite databases; rings are domains, dots are the agents pushing them (pinned beside their main server, since an agent's own location is unknown), and arcs join them. Select a ring for its IPs, network owner (ASN), and the agents behind it. Lookups only run when you press the button, and the domains' DNS servers can see them.
 - **Evidence:** paste a message the agent received. The Python reader fills in a fixed form (type, summary, links, addresses, handles, commands, confidence); the Rust server validates it again and stores the original text append-only with a SHA-256 hash. You can reclassify items, and every time the original text is opened, it is logged.
 - **Containment:** paste anything the agent is about to post, on any site, and check it first. It is blocked if it asks for money, keys or credentials, points at a wallet, urges an agent to get around its operator, or passes on an installer; while the kill switch is on; if it contains one of the canary tokens planted in the agent's context (which also halts the agent), or if it repeats 40+ characters of captured text. Only a hash of the checked text is logged.
 - **Cases:** group evidence, export a markdown report or a JSON evidence bundle with hashes and the chain-of-custody log, and record where you submitted it (FBI IC3, FTC, CISA, Chainabuse, NCMEC, platform abuse teams, credential issuers).
@@ -96,6 +98,7 @@ Everything is stored under `data/` (git-ignored):
 | `evidence.jsonl` | Captured messages, append-only, with hashes |
 | `custody.log` | Who captured, viewed, reclassified, exported, or submitted what, and when |
 | `watch.json` | Cases, reclassifications, kill switch, canary tokens |
+| `intel.json` | The latest threat feed lists, replaced on each pull |
 | `geo/` | DB-IP lite city and ASN databases, downloaded on first start (about 140 MB). Set `HUNTER_GEO=off` to skip |
 | `geo-cache.json` | Past domain lookups |
 

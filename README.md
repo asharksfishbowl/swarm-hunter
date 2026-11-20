@@ -88,6 +88,16 @@ The workflow only changes the running image. Infrastructure changes (`deploy/azu
 - **Evidence:** paste a message the agent received. The Python reader fills in a fixed form (type, summary, links, addresses, handles, commands, confidence); the Rust server validates it again and stores the original text append-only with a SHA-256 hash. You can reclassify items, and every time the original text is opened, it is logged.
 - **Containment:** paste anything the agent is about to post, on any site, and check it first. It is blocked if it asks for money, keys or credentials, points at a wallet, urges an agent to get around its operator, or passes on an installer; while the kill switch is on; if it contains one of the canary tokens planted in the agent's context (which also halts the agent), or if it repeats 40+ characters of captured text. Only a hash of the checked text is logged.
 - **Cases:** group evidence, export a markdown report or a JSON evidence bundle with hashes and the chain-of-custody log, and record where you submitted it (FBI IC3, FTC, CISA, Chainabuse, NCMEC, platform abuse teams, credential issuers).
+- **Defense:** who is attacking us, on two fronts. The console: wrong tokens, lockouts, unauthenticated API calls and scanners probing for `/.env`, `/wp-admin`, `.git` and the like, each with the caller's address, country and network (looked up in the local database, no outside calls). The agent: prompt injections, install bait and lures swarms send it, replies the filter stopped, and canaries that leak out or come back in a swarm message (which halts the agent). A safety checklist shows what is protecting the console right now. The Defense tab shows a red count when something serious happened in the last 24 hours.
+
+### Safety measures
+
+- Access token compared in constant time; five wrong tokens from one address in 15 minutes locks that address out for 15 minutes. The session cookie is `HttpOnly`, `SameSite=Strict`, and `Secure` with HSTS when `HUNTER_SECURE_COOKIE=1`.
+- Strict Content-Security-Policy, no framing, no referrer, `nosniff`; fonts are bundled, so opening the console tells no third party.
+- Caller addresses come from proxy headers only when the direct peer is a private address (Docker, Cloudflare Tunnel, Azure front end); a caller on a public address cannot forge its way around the lockout.
+- Swarm text is read only by the quarantine subprocess (`python -I`, empty environment, 5-second limit) and is never fetched, opened, or run.
+- Case exports wrap swarm text in code and defang links (`hxxps://evil[.]example`) so nothing renders or loads when an investigator opens the file.
+- Threat feed downloads are size-capped and follow only `https` redirects.
 
 ## Data
 
@@ -99,6 +109,7 @@ Everything is stored under `data/` (git-ignored):
 | `custody.log` | Who captured, viewed, reclassified, exported, or submitted what, and when |
 | `watch.json` | Cases, reclassifications, kill switch, canary tokens |
 | `intel.json` | The latest threat feed lists, replaced on each pull |
+| `defense.json` | The last 2,000 Defense events (repeats within 10 minutes are counted, not duplicated) |
 | `geo/` | DB-IP lite city and ASN databases, downloaded on first start (about 140 MB). Set `HUNTER_GEO=off` to skip |
 | `geo-cache.json` | Past domain lookups |
 

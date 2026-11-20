@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import DeckGL from "@deck.gl/react"
 import { _GlobeView as GlobeView, MapView, type PickingInfo } from "@deck.gl/core"
-import { ArcLayer, GeoJsonLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from "@deck.gl/layers"
+import { ArcLayer, GeoJsonLayer, ScatterplotLayer, SolidPolygonLayer } from "@deck.gl/layers"
 import { feature } from "topojson-client"
 import type { Topology, GeometryCollection } from "topojson-specification"
 import type { FeatureCollection } from "geojson"
@@ -29,7 +29,6 @@ for (let lon = -180; lon < 180; lon += 10) {
     oceanCells.push({ polygon: [[lon, lat], [lon + 10, lat], [lon + 10, lat + 10], [lon, lat + 10]] })
   }
 }
-const labelFont = "ui-monospace, SFMono-Regular, Menlo, monospace"
 
 const dbCopy: Record<WorldData["database"]["status"], string> = {
   ready: "Location database ready",
@@ -56,29 +55,30 @@ function facing(view: View, [lon, lat]: [number, number]): boolean {
 
 const MAX_LABELS = 36
 
-function declutter<T>(
+type Box = { x: number; y: number; w: number; h: number }
+
+function placeLabels<T>(
   items: T[],
-  zoom: number,
-  at: (item: T) => [number, number],
-  rank: (item: T) => number,
-  width: (item: T) => number,
-): T[] {
-  const perDegree = (512 * Math.pow(2, zoom)) / 360
-  const kept: { lon: number; lat: number; width: number }[] = []
-  return [...items]
-    .sort((a, b) => rank(b) - rank(a))
-    .filter((item) => {
-      if (kept.length >= MAX_LABELS) return false
-      const [lon, lat] = at(item)
-      const w = width(item)
-      const clash = kept.some(
-        (k) =>
-          Math.abs(k.lat - lat) * perDegree < 18 &&
-          Math.abs(k.lon - lon) * Math.cos((lat * Math.PI) / 180) * perDegree < (k.width + w) / 2 + 10,
-      )
-      if (!clash) kept.push({ lon, lat, width: w })
-      return !clash
-    })
+  project: (item: T) => [number, number],
+  text: (item: T) => string,
+  width: number,
+  height: number,
+  taken: Box[] = [],
+): { item: T; x: number; y: number }[] {
+  const out: { item: T; x: number; y: number }[] = []
+  const boxes = [...taken]
+  for (const item of items) {
+    if (out.length >= MAX_LABELS) break
+    const [x, y] = project(item)
+    const w = text(item).length * 6.6 + 8
+    const box = { x: x - w / 2, y: y + 12, w, h: 16 }
+    if (box.x < 4 || box.x + box.w > width - 4 || box.y < 4 || box.y + box.h > height - 18) continue
+    const clash = boxes.some((b) => box.x < b.x + b.w && b.x < box.x + box.w && box.y < b.y + b.h && b.y < box.y + box.h)
+    if (clash) continue
+    boxes.push(box)
+    out.push({ item, x, y })
+  }
+  return out
 }
 
 function hostLabel(host: PlacedHost) {
@@ -276,16 +276,14 @@ export function World({ refreshKey }: { refreshKey: number }) {
     () => (globe ? agents.filter((agent) => facing(coarse, agent.at)) : agents),
     [agents, globe, coarse],
   )
-  const hostLabels = useMemo(
+  const rankedHosts = useMemo(
     () =>
-      declutter(
-        facingHosts,
-        coarse.zoom,
-        (host) => host.position,
-        (host) => host.threat + (host.evidence.length ? 5 : 0) + (related?.has(`host:${host.host}`) ? 10 : 0),
-        (host) => hostLabel(host).length * 6.6,
+      [...facingHosts].sort(
+        (a, b) =>
+          b.threat + (b.evidence.length ? 5 : 0) + (related?.has(`host:${b.host}`) ? 10 : 0) -
+          (a.threat + (a.evidence.length ? 5 : 0) + (related?.has(`host:${a.host}`) ? 10 : 0)),
       ),
-    [facingHosts, coarse, related],
+    [facingHosts, related],
   )
   const agentLabels = facingAgents.filter((agent) => related?.has(`agent:${agent.name}`))
 
@@ -370,37 +368,6 @@ export function World({ refreshKey }: { refreshKey: number }) {
         }
       },
       updateTriggers: { getFillColor: [focus], getLineColor: [selected] },
-    }),
-    new TextLayer<PlacedHost>({
-      id: "host-labels",
-      data: globe ? [] : hostLabels,
-      getPosition: (host) => host.position,
-      getText: hostLabel,
-      getPixelOffset: (host) => [0, 14 + host.threat * 7],
-      getSize: 11,
-      getColor: (host) => [228, 228, 231, alpha(`host:${host.host}`, 225, 90)],
-      fontFamily: labelFont,
-      characterSet: "auto",
-      outlineWidth: 3,
-      outlineColor: [3, 3, 4, 255],
-      fontSettings: { sdf: true },
-      parameters: overlay,
-      updateTriggers: { getColor: [focus] },
-    }),
-    new TextLayer<PlacedAgent>({
-      id: "agent-labels",
-      data: globe ? [] : agentLabels,
-      getPosition: (agent) => agent.at,
-      getText: (agent) => agent.name,
-      getPixelOffset: [0, -14],
-      getSize: 12,
-      getColor: [244, 244, 245, 255],
-      fontFamily: labelFont,
-      characterSet: "auto",
-      outlineWidth: 3,
-      outlineColor: [3, 3, 4, 255],
-      fontSettings: { sdf: true },
-      parameters: overlay,
     }),
   ]
 
@@ -495,36 +462,42 @@ export function World({ refreshKey }: { refreshKey: number }) {
                 if (!info.object) setSelected(null)
               }}
             >
-              {globe
-                ? ({ viewport }) => (
-                    <div className="pointer-events-none absolute inset-0 font-mono">
-                      {hostLabels.map((host) => {
-                        const [x, y] = viewport.project(host.position)
-                        return (
-                          <span
-                            key={host.host}
-                            className="absolute -translate-x-1/2 text-[11px] whitespace-nowrap text-zinc-200 [text-shadow:0_0_3px_#030304,0_0_3px_#030304]"
-                            style={{ left: x, top: y + 8 + host.threat * 7, opacity: lit(`host:${host.host}`) ? 0.9 : 0.35 }}
-                          >
-                            {hostLabel(host)}
-                          </span>
-                        )
-                      })}
-                      {agentLabels.map((agent) => {
-                        const [x, y] = viewport.project(agent.at)
-                        return (
-                          <span
-                            key={agent.name}
-                            className="absolute -translate-x-1/2 -translate-y-full text-xs whitespace-nowrap text-zinc-50 [text-shadow:0_0_3px_#030304,0_0_3px_#030304]"
-                            style={{ left: x, top: y - 8 }}
-                          >
-                            {agent.name}
-                          </span>
-                        )
-                      })}
-                    </div>
-                  )
-                : null}
+              {({ viewport }) => {
+                const agentSpots = agentLabels.map((agent) => {
+                  const [x, y] = viewport.project(agent.at)
+                  return { agent, x, y }
+                })
+                const hostSpots = placeLabels(
+                  rankedHosts,
+                  (host) => viewport.project(host.position) as [number, number],
+                  hostLabel,
+                  viewport.width,
+                  viewport.height,
+                  agentSpots.map(({ agent, x, y }) => ({ x: x - agent.name.length * 3.6, y: y - 24, w: agent.name.length * 7.2, h: 18 })),
+                )
+                return (
+                  <div className="pointer-events-none absolute inset-0 font-mono">
+                    {hostSpots.map(({ item: host, x, y }) => (
+                      <span
+                        key={host.host}
+                        className="absolute -translate-x-1/2 text-[11px] whitespace-nowrap text-zinc-200 [text-shadow:0_0_3px_#030304,0_0_3px_#030304]"
+                        style={{ left: x, top: y + 12, opacity: lit(`host:${host.host}`) ? 0.9 : 0.35 }}
+                      >
+                        {hostLabel(host)}
+                      </span>
+                    ))}
+                    {agentSpots.map(({ agent, x, y }) => (
+                      <span
+                        key={agent.name}
+                        className="absolute -translate-x-1/2 -translate-y-full text-xs whitespace-nowrap text-zinc-50 [text-shadow:0_0_3px_#030304,0_0_3px_#030304]"
+                        style={{ left: x, top: y - 8 }}
+                      >
+                        {agent.name}
+                      </span>
+                    ))}
+                  </div>
+                )
+              }}
             </DeckGL>
           ) : null}
           {loading && !world ? (
